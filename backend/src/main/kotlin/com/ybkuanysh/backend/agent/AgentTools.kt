@@ -8,12 +8,15 @@ import com.ybkuanysh.backend.dto.ForecastSummary
 import com.ybkuanysh.backend.dto.MetricsResponse
 import com.ybkuanysh.backend.dto.Turbine
 import com.ybkuanysh.backend.mock.MockDataService
+import com.ybkuanysh.backend.weather.WeatherService
 import org.springframework.ai.chat.model.ToolContext
 import org.springframework.ai.tool.annotation.Tool
 import org.springframework.ai.tool.annotation.ToolParam
 import org.springframework.stereotype.Component
 import java.time.Instant
 import java.time.LocalDate
+import java.time.temporal.ChronoUnit
+import java.time.format.DateTimeParseException
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 
@@ -30,11 +33,11 @@ data class AgentForecastView(
 )
 
 /**
- * Инструменты агента. Пока работают поверх моков; когда появятся Open-Meteo и ML-сервис,
- * меняется только реализация — сигнатуры и описания для LLM остаются.
+ * Инструменты агента. Погода — реальная (Open-Meteo), прогноз мощности и метрики пока на моках;
+ * когда появится ML-сервис, меняется только реализация — сигнатуры и описания для LLM остаются.
  */
 @Component
-class AgentTools(private val mock: MockDataService) {
+class AgentTools(private val mock: MockDataService, private val weather: WeatherService) {
 
     @Tool(description = "Список турбин ВЭС с идентификаторами и координатами")
     fun listTurbines(ctx: ToolContext): List<Turbine> =
@@ -81,6 +84,39 @@ class AgentTools(private val mock: MockDataService) {
         }
     }
 
+    @Tool(
+        description = "Реальный прогноз погоды (ECMWF IFS, Open-Meteo) у турбины на календарные дни UTC — " +
+            "в том виде, в каком он был известен в 00:00 UTC первого дня (как прогноз на сутки вперёд). " +
+            "conclusions — готовые выводы по каждому дню («За dd.MM.yyyy: …») и, если дней несколько, за весь период: " +
+            "отвечай по ним и не делай своих выводов о рисках. Почасовые строки hourly — только при detailed=true.",
+    )
+    fun getWeather(
+        @ToolParam(description = "Идентификатор турбины, например t1") turbineId: String,
+        @ToolParam(description = "Первый день, yyyy-MM-dd") date: String,
+        @ToolParam(description = "Последний день включительно, yyyy-MM-dd; не больше 3 дней от первого. Пусто — один день", required = false)
+        toDate: String?,
+        @ToolParam(description = "true — добавить почасовые данные. Нужно, только если спрашивают про конкретные часы", required = false)
+        detailed: Boolean?,
+        ctx: ToolContext,
+    ): AgentWeatherView {
+        val d = detailed ?: false
+        return traced(ctx, "getWeather", mapOf("turbineId" to turbineId, "date" to date, "toDate" to toDate, "detailed" to d)) {
+            val from = parseDate(date)
+            val to = toDate?.takeIf { it.isNotBlank() }?.let { parseDate(it) } ?: from
+            val days = ChronoUnit.DAYS.between(from, to) + 1
+            require(days in 1..MAX_WEATHER_DAYS) { "Период должен быть от 1 до $MAX_WEATHER_DAYS дней, получено: $date–$toDate" }
+            val turbine = mock.requireTurbine(turbineId)
+            val at = from.atStartOfDay().toInstant(ZoneOffset.UTC)
+            weather.forecastAt(turbine.lat, turbine.lon, at, (days * 24).toInt()).toAgentView(turbineId, d)
+        }
+    }
+
+    private fun parseDate(s: String): LocalDate = try {
+        LocalDate.parse(s.trim())
+    } catch (e: DateTimeParseException) {
+        throw IllegalArgumentException("Неверный формат даты '$s': нужен yyyy-MM-dd")
+    }
+
     private fun compact(fc: ForecastResponse) = AgentForecastView(
         turbineId = fc.turbineId,
         forecastIssuedAt = fc.forecastIssuedAt,
@@ -107,6 +143,7 @@ class AgentTools(private val mock: MockDataService) {
 
     companion object {
         const val TRACE_KEY = "trace"
+        private const val MAX_WEATHER_DAYS = 3
         private val HOUR: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneOffset.UTC)
     }
 }
