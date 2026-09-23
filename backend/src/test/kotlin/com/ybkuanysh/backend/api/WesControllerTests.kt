@@ -2,7 +2,9 @@ package com.ybkuanysh.backend.api
 
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import com.ybkuanysh.backend.support.FixtureMlConfig
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc
 import org.springframework.http.MediaType
 import org.springframework.test.web.servlet.MockMvc
@@ -13,6 +15,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 @SpringBootTest
+@Import(FixtureMlConfig::class)
 @AutoConfigureMockMvc
 class WesControllerTests(@Autowired val mvc: MockMvc) {
 
@@ -29,32 +32,36 @@ class WesControllerTests(@Autowired val mvc: MockMvc) {
     }
 
     @Test
-    fun `forecast defaults to 48 points with actuals in backtest period`() {
-        mvc.get("/api/forecast?turbineId=t1&date=2026-02-01").andExpect {
+    fun `forecast comes from ML issued at noon local for the next two days`() {
+        mvc.get("/api/forecast?turbineId=t1&date=2026-01-31").andExpect {
             status { isOk() }
             jsonPath("$.turbineId") { value("t1") }
-            jsonPath("$.forecastIssuedAt") { value("2026-02-01T00:00:00Z") }
+            // 31.01 12:00 Asia/Almaty (UTC+5) → сутки 01.02 и 02.02 местного времени
+            jsonPath("$.forecastIssuedAt") { value("2026-01-31T07:00:00Z") }
+            jsonPath("$.weatherIssuedAt") { value("2026-01-30T18:00:00Z") }
             jsonPath("$.horizonHours") { value(48) }
             jsonPath("$.points.length()") { value(48) }
-            jsonPath("$.points[0].timestamp") { value("2026-02-01T01:00:00Z") }
-            jsonPath("$.points[0].actualPower") { isNumber() }
+            jsonPath("$.points[0].timestamp") { value("2026-01-31T19:00:00Z") }
+            jsonPath("$.points[47].timestamp") { value("2026-02-02T18:00:00Z") }
+            jsonPath("$.points[0].actualPower") { doesNotExist() }
+            jsonPath("$.weatherSource") { value("open-meteo-previous-runs") }
+            jsonPath("$.modelVersion") { value("windml-2026-09-23") }
         }
     }
 
     @Test
-    fun `forecast is deterministic`() {
-        val url = "/api/forecast?turbineId=t2&date=2026-02-10&horizonHours=24"
-        val a = mvc.get(url).andReturn().response.contentAsString
+    fun `forecast is deterministic and 24h means the next day only`() {
+        val url = "/api/forecast?turbineId=t2&date=2026-02-03&horizonHours=24"
+        val a = mvc.get(url).andExpect { jsonPath("$.points.length()") { value(24) } }.andReturn().response.contentAsString
         val b = mvc.get(url).andReturn().response.contentAsString
-        kotlin.test.assertEquals(a, b)
+        assertEquals(a, b)
     }
 
     @Test
-    fun `forecast after backtest period has null actuals`() {
-        mvc.get("/api/forecast?turbineId=t1&date=2026-03-05&horizonHours=24").andExpect {
-            status { isOk() }
-            jsonPath("$.points.length()") { value(24) }
-            jsonPath("$.points[0].actualPower") { doesNotExist() }
+    fun `forecast without ML data is 503`() {
+        mvc.get("/api/forecast?turbineId=t1&date=2026-03-05").andExpect {
+            status { isServiceUnavailable() }
+            jsonPath("$.message") { isString() }
         }
     }
 
@@ -135,20 +142,22 @@ class WesControllerTests(@Autowired val mvc: MockMvc) {
         mvc.get("/api/meta").andExpect {
             status { isOk() }
             jsonPath("$.backtestFrom") { value("2026-01-31") }
-            jsonPath("$.backtestTo") { value("2026-02-27") }
-            jsonPath("$.revisionsPerDay") { value(4) }
+            jsonPath("$.backtestTo") { value("2026-02-26") }
+            jsonPath("$.revisionsPerDay") { value(2) }
+            jsonPath("$.issueTimeLocal") { value("12:00") }
+            jsonPath("$.localTz") { value("Asia/Almaty") }
+            jsonPath("$.modelVersion") { value("windml-1.0.0-2026-09-23") }
             jsonPath("$.llmModel") { isString() }
         }
     }
 
     @Test
     fun `forecast has quantiles, summary and weather issued before forecast`() {
-        val body = mvc.get("/api/forecast?turbineId=t1&date=2026-02-05&revision=2").andExpect {
+        val body = mvc.get("/api/forecast?turbineId=t1&date=2026-02-04").andExpect {
             status { isOk() }
-            jsonPath("$.revision") { value(2) }
-            jsonPath("$.forecastIssuedAt") { value("2026-02-05T06:00:00Z") }
-            jsonPath("$.weatherIssuedAt") { value("2026-02-04T18:00:00Z") }
-            jsonPath("$.points[0].timestamp") { value("2026-02-05T07:00:00Z") }
+            jsonPath("$.forecastIssuedAt") { value("2026-02-04T07:00:00Z") }
+            jsonPath("$.weatherIssuedAt") { value("2026-02-03T18:00:00Z") }
+            jsonPath("$.points[0].timestamp") { value("2026-02-04T19:00:00Z") }
             jsonPath("$.summary.meanPower") { isNumber() }
             jsonPath("$.alerts") { isArray() }
             jsonPath("$.agentReport") { isString() }
@@ -167,11 +176,13 @@ class WesControllerTests(@Autowired val mvc: MockMvc) {
     fun `revisions list and validation`() {
         mvc.get("/api/forecast/revisions?turbineId=t1&date=2026-02-05").andExpect {
             status { isOk() }
-            jsonPath("$.revisions.length()") { value(4) }
+            // Сутки 05.02: из выпуска 03.02 (как D+2) и из выпуска 04.02 (как D+1)
+            jsonPath("$.revisions.length()") { value(2) }
+            jsonPath("$.revisions[0].forecastIssuedAt") { value("2026-02-03T07:00:00Z") }
+            jsonPath("$.revisions[1].forecastIssuedAt") { value("2026-02-04T07:00:00Z") }
             jsonPath("$.revisions[0].changeVsPreviousPct") { doesNotExist() }
             jsonPath("$.revisions[1].changeVsPreviousPct") { isNumber() }
         }
-        mvc.get("/api/forecast?turbineId=t1&date=2026-02-05&revision=5").andExpect { status { isBadRequest() } }
         mvc.get("/api/agent-log?date=2026-02-05&revision=0").andExpect { status { isBadRequest() } }
     }
 

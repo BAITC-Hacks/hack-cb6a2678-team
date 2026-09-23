@@ -1,0 +1,6 @@
+# Тесты не ходят в сеть: погода только из (пустого) кэша, ML подменяется фикстурами (FixtureMlConfig)
+weather:
+  offline: true
+  cache-dir: build/weather-cache-test
+ml:
+  base-url: http://localhost:1

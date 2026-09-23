@@ -31,6 +31,12 @@ weather:
   cache-dir: ${WEATHER_CACHE_DIR:../data/weather-cache}
   offline: ${WEATHER_OFFLINE:false}
 
+ml:
+  # ML-сервис (ML/, FastAPI): cd ML && uvicorn windml.api:app --port 8000
+  base-url: ${ML_BASE_URL:http://localhost:8000}
+  local-tz: ${ML_LOCAL_TZ:Asia/Almaty}
+  issue-hour-local: 12
+
 server:
   port: 8080
 

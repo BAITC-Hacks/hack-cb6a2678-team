@@ -1,7 +1,10 @@
 package com.ybkuanysh.backend.agent
 
 import com.ybkuanysh.backend.dto.AgentToolCall
+import com.ybkuanysh.backend.forecast.ForecastService
+import com.ybkuanysh.backend.ml.MlProperties
 import com.ybkuanysh.backend.mock.MockDataService
+import com.ybkuanysh.backend.support.FixtureMl
 import com.ybkuanysh.backend.weather.WeatherHour
 import com.ybkuanysh.backend.weather.WeatherProperties
 import com.ybkuanysh.backend.weather.WeatherRunSource
@@ -42,7 +45,10 @@ class AgentWeatherToolTests {
     private fun tools(): AgentTools {
         val mapper = JsonMapper.builder().build()
         val weather = WeatherService(source, WeatherProperties(cacheDir = cacheDir.toString()), mapper)
-        return AgentTools(MockDataService(Clock.systemUTC(), weather), weather)
+        val mock = MockDataService(Clock.systemUTC(), weather)
+        // localTz = UTC: дни и часы в проверках ниже — в UTC
+        val ml = MlProperties(localTz = "Z")
+        return AgentTools(mock, weather, ForecastService(FixtureMl(), ml, weather, mock), ml)
     }
 
     private fun ctx() = mutableListOf<AgentToolCall>().let { it to ToolContext(mapOf(AgentTools.TRACE_KEY to it)) }

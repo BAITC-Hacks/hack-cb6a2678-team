@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.client.ResourceAccessException
 import com.ybkuanysh.backend.weather.WeatherUnavailableException
+import com.ybkuanysh.backend.ml.MlUnavailableException
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
 
 class BadRequestException(message: String) : RuntimeException(message)
@@ -48,4 +49,8 @@ class ErrorHandler {
     @ExceptionHandler(WeatherUnavailableException::class)
     @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
     fun weatherUnavailable(e: WeatherUnavailableException) = ErrorResponse(e.message ?: "Weather unavailable")
+
+    @ExceptionHandler(MlUnavailableException::class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    fun mlUnavailable(e: MlUnavailableException) = ErrorResponse(e.message ?: "ML service unavailable")
 }

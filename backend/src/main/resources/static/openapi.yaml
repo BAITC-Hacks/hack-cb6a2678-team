@@ -10,20 +10,23 @@ info:
     **Время.** Все метки времени — UTC (ISO-8601 с `Z`).
 
 
-    **Backtest.** Прогнозы выпускаются «как если бы» на 00:00 UTC каждой даты
-    с 2026-01-31 по 2026-02-27 (горизонт 24–48 ч покрывает период по 2026-02-28).
-    Границы периода отдаёт `GET /api/meta`.
+    **Прогноз (v1.2).** Прогноз выдаёт ML-модель. Выпуск «как если бы» в день D в 12:00
+    местного времени станции (Asia/Almaty, UTC+5) покрывает сутки D+1 и D+2 по местному
+    времени — 48 часов. Даты выпуска в backtest: 2026-01-31…2026-02-26 (покрывают 01–28.02).
+    Параметры — `GET /api/meta`. Факта за февраль нет в данных: `actualPower` = null.
 
 
-    **Ревизии.** Ревизия 1 — плановый прогноз в 00:00 UTC (по ней считаются
-    метрики). Ревизии 2–4 — пересчёты в 06/12/18 UTC при выходе новых прогонов
-    погоды.
+    **Версии прогноза.** Каждые сутки X прогнозируются дважды: из выпуска X−2 (как D+2) и из
+    выпуска X−1 (как D+1, по более свежему прогнозу погоды) — повторный расчёт при
+    обновлении входных данных. `GET /api/forecast/revisions`.
 
 
-    **Честность данных.** Каждый прогноз указывает `weatherIssuedAt` — время
-    выпуска использованного прогноза погоды. Оно всегда не позже
-    `forecastIssuedAt`: данные из будущего не используются.
-  version: 1.1.0
+    **Честность данных.** Каждый прогноз указывает `weatherIssuedAt` — самый поздний момент
+    выпуска использованных прогнозов погоды. Он всегда не позже `forecastIssuedAt`.
+
+
+    **Пока демо-данные:** `/api/metrics`, `/api/agent-log`, `/api/forecast/run`.
+  version: 1.2.0
 
 servers:
   - url: http://localhost:8080
@@ -52,8 +55,8 @@ paths:
       tags: [Meta]
       summary: Параметры системы
       description: >
-        Границы backtest-периода (для ограничения выбора даты на фронте),
-        доступные горизонты, число ревизий в день, версии модели и LLM.
+        Границы backtest-периода (для ограничения выбора даты на фронте), время выпуска,
+        доступные горизонты, число версий прогноза на сутки, версии модели и LLM.
       operationId: getMeta
       responses:
         '200':
@@ -90,23 +93,23 @@ paths:
   /api/forecast:
     get:
       tags: [Forecast]
-      summary: Почасовой прогноз выработки для турбины на заданную дату
+      summary: Прогноз ML, выпущенный в указанный день
       description: >
-        Возвращает прогноз, сформированный «как если бы» в момент
-        `forecastIssuedAt` (00:00 UTC даты + 6 ч × (revision − 1)), на горизонт
-        24 или 48 часов. Кроме точек содержит готовую сводку, предупреждения и
-        текстовый отчёт агента.
+        Прогноз, выпущенный «как если бы» в день `date` в 12:00 местного времени
+        (`forecastIssuedAt`): 24 ч — следующие сутки, 48 ч — следующие двое суток (по местному
+        времени). Кроме точек содержит сводку, предупреждения (ML + правила) и отчёт.
+        503 — ML-сервис недоступен или нет погоды на эту дату.
       operationId: getForecast
       parameters:
         - $ref: '#/components/parameters/TurbineId'
         - name: date
           in: query
           required: true
-          description: Дата, на которую формируется прогноз (имитация «сегодня»)
+          description: День выпуска (имитация «сегодня»)
           schema:
             type: string
             format: date
-          example: "2026-02-01"
+          example: "2026-01-31"
         - name: horizonHours
           in: query
           required: false
@@ -115,7 +118,6 @@ paths:
             type: integer
             enum: [24, 48]
             default: 48
-        - $ref: '#/components/parameters/Revision'
       responses:
         '200':
           description: Прогноз на указанный период
@@ -125,46 +127,49 @@ paths:
                 $ref: '#/components/schemas/ForecastResponse'
               example:
                 turbineId: "t1"
-                forecastIssuedAt: "2026-02-01T00:00:00Z"
+                forecastIssuedAt: "2026-01-31T07:00:00Z"
                 revision: 1
                 horizonHours: 48
-                weatherSource: "open-meteo:ecmwf_ifs"
-                weatherIssuedAt: "2026-01-31T12:00:00Z"
-                modelVersion: "lgbm-v1"
+                weatherSource: "open-meteo-previous-runs"
+                weatherIssuedAt: "2026-01-30T18:00:00Z"
+                modelVersion: "windml-2026-09-23"
                 summary:
-                  meanPower: 0.412
+                  meanPower: 0.366
                   minPower: 0.0
-                  maxPower: 0.91
-                  maxPowerAt: "2026-02-01T14:00:00Z"
-                  fullLoadHours: 19.8
-                  lowPowerHours: 6
+                  maxPower: 0.901
+                  maxPowerAt: "2026-02-02T09:00:00Z"
+                  fullLoadHours: 17.6
+                  lowPowerHours: 0
                 alerts:
-                  - type: "icing"
+                  - type: "low_confidence"
                     severity: "warning"
-                    from: "2026-02-01T02:00:00Z"
-                    to: "2026-02-01T06:00:00Z"
-                    message: "Риск обледенения лопастей: температура около 0 °C"
-                agentReport: "Средняя мощность 0.41, пик 0.91 в 14:00 UTC. Ночью риск обледенения."
+                    from: "2026-01-31T19:00:00Z"
+                    to: "2026-02-02T18:00:00Z"
+                    message: "29 ч с разбросом ветра между моделями > 2.5 м/с — рекомендуется пересчёт после следующего обновления прогноза погоды"
+                agentReport: "Средняя мощность 0.366, пик 0.901 в 02.02 09:00 UTC, часов с выработкой ниже 0.05: 0."
                 points:
-                  - timestamp: "2026-02-01T01:00:00Z"
-                    predictedPower: 0.42
-                    p10: 0.30
-                    p90: 0.55
-                    actualPower: 0.39
-                    windSpeed: 7.2
-                    temperature: -3.1
+                  - timestamp: "2026-01-31T19:00:00Z"
+                    predictedPower: 0.098
+                    p10: 0.007
+                    p90: 0.183
+                    actualPower: null
+                    windSpeed: 4.1
+                    temperature: -6.3
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
 
   /api/forecast/revisions:
     get:
       tags: [Forecast]
-      summary: Ревизии прогноза за дату
+      summary: Версии прогноза на целевые сутки
       description: >
-        Как менялся прогноз при выходе новых прогонов погоды. Для переключателя
-        версий на фронте и демонстрации повторного расчёта.
+        Как менялся прогноз на сутки `date` (местное время): версия 1 — из выпуска
+        date−2 (как D+2), версия 2 — из выпуска date−1 (как D+1, по более свежей погоде).
+        Недоступная версия пропускается. `meanPower` — средняя мощность за эти сутки.
       operationId: getForecastRevisions
       parameters:
         - $ref: '#/components/parameters/TurbineId'
@@ -183,19 +188,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/ForecastRevisionsResponse'
               example:
-                turbineId: "t1"
-                date: "2026-02-01"
+                turbineId: "t2"
+                date: "2026-02-15"
                 revisions:
                   - revision: 1
-                    forecastIssuedAt: "2026-02-01T00:00:00Z"
-                    weatherIssuedAt: "2026-01-31T12:00:00Z"
-                    meanPower: 0.412
+                    forecastIssuedAt: "2026-02-13T07:00:00Z"
+                    weatherIssuedAt: "2026-02-12T18:00:00Z"
+                    meanPower: 0.511
                     changeVsPreviousPct: null
                   - revision: 2
-                    forecastIssuedAt: "2026-02-01T06:00:00Z"
-                    weatherIssuedAt: "2026-01-31T18:00:00Z"
-                    meanPower: 0.379
-                    changeVsPreviousPct: -8.0
+                    forecastIssuedAt: "2026-02-14T07:00:00Z"
+                    weatherIssuedAt: "2026-02-13T18:00:00Z"
+                    meanPower: 0.555
+                    changeVsPreviousPct: 8.6
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -443,6 +448,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    Unavailable:
+      description: ML-сервис недоступен или нет данных на эту дату
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     NotFound:
       description: Турбина не найдена
       content:
@@ -454,7 +465,7 @@ components:
 
     MetaResponse:
       type: object
-      required: [backtestFrom, backtestTo, horizons, revisionsPerDay, timezone, modelVersion, llmModel]
+      required: [backtestFrom, backtestTo, horizons, revisionsPerDay, timezone, issueTimeLocal, localTz, modelVersion, llmModel]
       properties:
         backtestFrom:
           type: string
@@ -464,8 +475,8 @@ components:
         backtestTo:
           type: string
           format: date
-          description: Последняя дата выпуска прогноза
-          example: "2026-02-27"
+          description: Последняя дата выпуска прогноза (покрывает сутки до 28.02)
+          example: "2026-02-26"
         horizons:
           type: array
           items:
@@ -473,13 +484,24 @@ components:
           example: [24, 48]
         revisionsPerDay:
           type: integer
-          example: 4
+          description: Сколько версий прогноза бывает у одних суток
+          example: 2
         timezone:
           type: string
+          description: Пояс всех меток времени в API
           example: "UTC"
+        issueTimeLocal:
+          type: string
+          description: Время выпуска прогноза по местному времени станции
+          example: "12:00"
+        localTz:
+          type: string
+          description: Местный пояс станции (в нём задаются сутки прогноза); для отображения на фронте
+          example: "Asia/Almaty"
         modelVersion:
           type: string
-          example: "lgbm-v1"
+          description: Версия ML-модели; "unavailable", если ML-сервис не отвечает
+          example: "windml-1.0.0-2026-09-23"
         llmModel:
           type: string
           example: "qwen3:8b"
@@ -505,17 +527,17 @@ components:
 
     ForecastPoint:
       type: object
-      required: [timestamp, predictedPower, windSpeed, temperature]
+      required: [timestamp, predictedPower]
       properties:
         timestamp:
           type: string
           format: date-time
-          description: Конец часового интервала, UTC
-          example: "2026-02-01T01:00:00Z"
+          description: Начало часа, к которому относится значение, UTC
+          example: "2026-01-31T19:00:00Z"
         predictedPower:
           type: number
           format: double
-          description: Медианный прогноз (P50) нормализованной мощности 0..1
+          description: Основной прогноз ML (среднее) нормализованной мощности 0..1
           example: 0.42
         p10:
           type: number
@@ -533,17 +555,19 @@ components:
           type: number
           format: double
           nullable: true
-          description: Фактическая мощность, если уже известна (для backtest)
-          example: 0.39
+          description: Фактическая мощность, если известна. За февраль 2026 факта нет — null
+          example: null
         windSpeed:
           type: number
           format: double
-          description: Прогнозная скорость ветра на высоте ступицы, м/с
+          nullable: true
+          description: Прогноз ветра на 100 м, м/с, известный в момент выпуска; null — нет данных
           example: 7.2
         temperature:
           type: number
           format: double
-          description: Прогнозная температура, °C
+          nullable: true
+          description: Прогноз температуры, °C; null — нет данных
           example: -3.1
 
     ForecastSummary:
@@ -585,11 +609,12 @@ components:
       properties:
         type:
           type: string
-          enum: [icing, storm_cutout, ramp_down, ramp_up, low_confidence]
+          enum: [icing, storm_cutout, ramp_down, ramp_up, low_confidence, model_physics_gap]
           description: >
             icing — риск обледенения; storm_cutout — ветер у порога штормового
             отключения; ramp_down/ramp_up — резкое изменение выработки;
-            low_confidence — широкий интервал P10–P90
+            low_confidence — модели погоды расходятся или широкий интервал P10–P90;
+            model_physics_gap — ML сильно расходится с физической кривой мощности
         severity:
           type: string
           enum: [info, warning, critical]
@@ -613,10 +638,11 @@ components:
         forecastIssuedAt:
           type: string
           format: date-time
-          description: Момент, «как если бы сегодня» формировался прогноз
-          example: "2026-02-01T00:00:00Z"
+          description: Момент выпуска «как если бы сегодня» — день D 12:00 местного, в UTC
+          example: "2026-01-31T07:00:00Z"
         revision:
           type: integer
+          description: Всегда 1 (версии одних суток — в /api/forecast/revisions)
           example: 1
         horizonHours:
           type: integer
@@ -624,17 +650,15 @@ components:
         weatherSource:
           type: string
           description: Источник и модель прогноза погоды
-          example: "open-meteo:ecmwf_ifs"
+          example: "open-meteo-previous-runs"
         weatherIssuedAt:
           type: string
           format: date-time
-          description: >
-            Время инициализации использованного прогона погоды. Прогон опубликован
-            через ~7 ч после инициализации, и эта публикация — не позже forecastIssuedAt.
-          example: "2026-01-31T12:00:00Z"
+          description: Самый поздний момент выпуска использованных прогнозов погоды; всегда ≤ forecastIssuedAt
+          example: "2026-01-30T18:00:00Z"
         modelVersion:
           type: string
-          example: "lgbm-v1"
+          example: "windml-2026-09-23"
         summary:
           $ref: '#/components/schemas/ForecastSummary'
         alerts:
@@ -666,7 +690,7 @@ components:
         meanPower:
           type: number
           format: double
-          description: Средняя мощность по горизонту 48 ч
+          description: Средняя мощность за целевые сутки
         changeVsPreviousPct:
           type: number
           format: double

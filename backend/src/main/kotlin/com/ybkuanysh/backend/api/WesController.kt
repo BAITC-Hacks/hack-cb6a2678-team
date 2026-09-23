@@ -8,6 +8,8 @@ import com.ybkuanysh.backend.dto.MetricsResponse
 import com.ybkuanysh.backend.dto.RunForecastRequest
 import com.ybkuanysh.backend.dto.RunForecastResponse
 import com.ybkuanysh.backend.dto.Turbine
+import com.ybkuanysh.backend.forecast.ForecastService
+import com.ybkuanysh.backend.ml.MlProperties
 import com.ybkuanysh.backend.mock.MockDataService
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.format.annotation.DateTimeFormat
@@ -26,17 +28,21 @@ import java.time.temporal.ChronoUnit
 @RequestMapping("/api")
 class WesController(
     private val mock: MockDataService,
+    private val forecasts: ForecastService,
+    private val ml: MlProperties,
     @Value("\${spring.ai.ollama.chat.model}") private val llmModel: String,
 ) {
 
     @GetMapping("/meta")
     fun getMeta() = MetaResponse(
-        backtestFrom = MockDataService.BACKTEST_FROM,
-        backtestTo = MockDataService.BACKTEST_TO,
+        backtestFrom = ForecastService.BACKTEST_FROM,
+        backtestTo = ForecastService.BACKTEST_TO,
         horizons = listOf(24, 48),
-        revisionsPerDay = MockDataService.REVISIONS_PER_DAY,
+        revisionsPerDay = ForecastService.VERSIONS_PER_TARGET_DAY,
         timezone = "UTC",
-        modelVersion = MockDataService.MODEL_VERSION,
+        issueTimeLocal = "%02d:00".format(ml.issueHourLocal),
+        localTz = ml.localTz,
+        modelVersion = forecasts.modelVersion("t1") ?: "unavailable",
         llmModel = llmModel,
     )
 
@@ -48,14 +54,13 @@ class WesController(
         @RequestParam turbineId: String,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) date: LocalDate,
         @RequestParam(defaultValue = "48") horizonHours: Int,
-        @RequestParam(defaultValue = "1") revision: Int,
-    ): ForecastResponse = mock.forecast(turbineId, date, validHorizon(horizonHours), validRevision(revision))
+    ): ForecastResponse = forecasts.forecast(turbineId, date, validHorizon(horizonHours))
 
     @GetMapping("/forecast/revisions")
     fun getForecastRevisions(
         @RequestParam turbineId: String,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) date: LocalDate,
-    ): ForecastRevisionsResponse = mock.revisions(turbineId, date)
+    ): ForecastRevisionsResponse = forecasts.revisions(turbineId, date)
 
     @GetMapping("/metrics")
     fun getMetrics(

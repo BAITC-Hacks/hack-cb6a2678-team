@@ -1,7 +1,7 @@
 # Фронтенд
 
-React. Бэкенд уже отдаёт моки по финальному контракту — можно делать все экраны сейчас,
-данные потом станут реальными без изменения формата.
+React. `/api/forecast` и `/api/forecast/revisions` уже отдают реальный прогноз ML (нужен запущенный ML-сервис,
+см. `AGENTS.md`); `/api/metrics`, `/api/agent-log`, `/api/forecast/run` пока на моках — формат не изменится.
 
 - API: `http://localhost:8080/api/**`, CORS открыт.
 - Контракт и примеры: `backend/src/main/resources/static/openapi.yaml`, Swagger UI — http://localhost:8080/swagger-ui.html.
@@ -10,7 +10,11 @@ React. Бэкенд уже отдаёт моки по финальному ко�
 
 ## Общие правила отображения
 
-- Все времена приходят в **UTC**. Показывать в местном времени станции (Казахстан, UTC+5) с подписью, либо в UTC с подписью — главное, одинаково везде.
+- Все времена приходят в **UTC**. Показывать в местном времени станции (`localTz` из `/api/meta`, Asia/Almaty = UTC+5) с подписью.
+- **Прогноз (v1.2):** `date` в `/api/forecast` — день выпуска D («сегодня»); прогноз выпущен в D 12:00 местного
+  и покрывает сутки D+1 и D+2 местного времени. `points[].timestamp` — **начало** часа.
+- Факта за февраль нет: `actualPower` всегда `null`, галочку «Показать факт» для февраля можно скрыть.
+- `windSpeed`, `temperature` могут быть `null`.
 - Мощность — **доля от номинала 0..1**. Показывать в процентах (0.42 → 42 %). Не МВт.
 - Диапазон дат для выбора — из `GET /api/meta` (`backtestFrom`…`backtestTo`), не хардкодить.
 - `null` в `actualPower` — факт ещё неизвестен (не 0!). В `p10`/`p90` — интервала нет, просто не рисовать полосу.
@@ -23,14 +27,14 @@ React. Бэкенд уже отдаёт моки по финальному ко�
 |---|---|
 | Выбор даты, горизонт 24/48 | `GET /api/meta` |
 | Выбор турбины | `GET /api/turbines` |
-| График: линия `predictedPower`, полоса `p10`–`p90`, факт `actualPower` по галочке | `GET /api/forecast?turbineId&date&horizonHours&revision` → `points` |
+| График: линия `predictedPower`, полоса `p10`–`p90` | `GET /api/forecast?turbineId&date&horizonHours` → `points` |
 | Плашки: средняя, пик и его время, часов простоя | `summary` (`meanPower`, `maxPower`, `maxPowerAt`, `lowPowerHours`) |
 | Предупреждения | `alerts[]`: `type`, `severity` (info/warning/critical), `from`–`to` (включительно), `message` |
 | Отчёт агента | `agentReport` |
-| Переключатель версий 00/06/12/18 и изменение в % | `GET /api/forecast/revisions` → `revisions[]` (`changeVsPreviousPct`) |
+| Версии прогноза на сутки: «за 2 дня» и «накануне», изменение в % | `GET /api/forecast/revisions?turbineId&date` (date — целевые сутки) → `revisions[]` |
 | «Данные не из будущего» | `weatherIssuedAt` < `forecastIssuedAt`, показать оба времени |
 
-По умолчанию `revision=1`. Галочку «Показать факт» по умолчанию лучше выключить — в момент прогноза факт неизвестен.
+Выбор даты — `backtestFrom..backtestTo` из `/api/meta` (31.01–26.02). Если ML-сервис не запущен, `/api/forecast` отвечает 503.
 
 ### 2. Как агент думал
 

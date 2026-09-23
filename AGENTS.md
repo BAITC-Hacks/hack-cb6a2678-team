@@ -37,15 +37,18 @@ docs/                       — документация
 
 ## Текущее состояние (обновлять при изменениях!)
 
-- Публичный API v1.1 описан и **отдаёт моки** (`backend/.../mock/MockDataService.kt`) — детерминированные синтетические данные.
+- Публичный API v1.2. `/api/forecast` и `/api/forecast/revisions` — **реальный прогноз ML** (`backend/.../forecast/`,
+  клиент `backend/.../ml/`): выпуск в день D 12:00 местного (Asia/Almaty) на сутки D+1 и D+2.
+  `/api/metrics`, `/api/agent-log`, `/api/forecast/run` пока **отдают моки** (`backend/.../mock/MockDataService.kt`).
 - LLM-агент работает: `POST /api/agent/chat`, Spring AI + Ollama (`qwen3:8b`), инструменты поверх моков.
 - Клиент погоды работает: `backend/.../weather/`, `GET /api/weather` — реальные архивные прогнозы ECMWF IFS
   (Open-Meteo Single Runs API) с защитой от утечки и кэшем в `data/weather-cache/`.
-- Агент получает реальную погоду инструментом `getWeather` (календарные дни, готовые выводы по дням).
-  Прогноз мощности и метрики у агента пока на моках.
+- Агент: `getForecast`/`getForecastRevisions` — ML, `getWeather` — Open-Meteo, `getMetrics` — моки (помечено в описании).
+  Дни и время для агента — местные (так спрашивает диспетчер и так ML задаёт сутки).
 - ML в `ML/`: обучение, модели двух турбин, погодный кэш (Previous Runs, ECMWF/GFS/ICON), FastAPI `/v1/forecast`,
   офлайн-тесты. Запуск и результаты — `ML/README.md`, `ML/TRAINING.md`. Агент один — в `backend/`
-  (Java-агент из `ML/spring-agent` удалён). С бэкендом пока не состыкован — план: `docs/ml-integration.md`.
+  (Java-агент из `ML/spring-agent` удалён). С бэкендом состыкован по `contracts/ml-service.openapi.yaml`;
+  план и оставшиеся шаги — `docs/ml-integration.md`, задачи ML — `docs/ml-tasks.md`.
 - Не сделано: интеграция ML с основным бэкендом, реальный цикл агента и backtest в нём.
 - План и статус этапов — `docs/roadmap.md`.
 
@@ -59,6 +62,8 @@ ollama pull qwen3:8b
 docker compose up -d
 
 # Бэкенд
+# ML-сервис (нужен для /api/forecast): Python 3.12+, на macOS ещё `brew install libomp`
+cd ML && pip install -r requirements.txt pyarrow && uvicorn windml.api:app --port 8000
 cd backend && ./gradlew bootRun            # http://localhost:8080, Swagger: /swagger-ui.html
 cd backend && ./gradlew test               # тесты (Ollama не нужна)
 ```

@@ -17,6 +17,8 @@ data class MetaResponse(
     val horizons: List<Int>,
     val revisionsPerDay: Int,
     val timezone: String,
+    val issueTimeLocal: String,
+    val localTz: String,
     val modelVersion: String,
     val llmModel: String,
 )
@@ -27,8 +29,8 @@ data class ForecastPoint(
     val p10: Double?,
     val p90: Double?,
     val actualPower: Double?,
-    val windSpeed: Double,
-    val temperature: Double,
+    val windSpeed: Double?,
+    val temperature: Double?,
 )
 
 data class ForecastSummary(
@@ -40,7 +42,7 @@ data class ForecastSummary(
     val lowPowerHours: Int,
 )
 
-enum class AlertType { icing, storm_cutout, ramp_down, ramp_up, low_confidence }
+enum class AlertType { icing, storm_cutout, ramp_down, ramp_up, low_confidence, model_physics_gap }
 
 enum class AlertSeverity { info, warning, critical }
 

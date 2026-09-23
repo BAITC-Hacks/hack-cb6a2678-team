@@ -3,6 +3,7 @@ package com.ybkuanysh.backend.agent
 import com.ybkuanysh.backend.weather.WeatherForecast
 import com.ybkuanysh.backend.weather.WeatherHour
 import java.time.Instant
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import kotlin.math.round
@@ -38,15 +39,20 @@ data class WeatherSummary(
     val icingRiskHours: Int,
 )
 
-private val HOUR: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneOffset.UTC)
+internal fun hourFormat(zone: ZoneId): DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(zone)
+internal fun dayFormat(zone: ZoneId): DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy").withZone(zone)
+
+/** Подпись к времени: агент отвечает диспетчеру по местному времени станции. */
+internal fun zoneLabel(zone: ZoneId): String = if (zone == ZoneOffset.UTC) "UTC" else "местного времени"
 
 /**
  * [detailed] — добавить почасовые строки; без них ответ короче и модель реже путает цифры.
  * Часы горизонта должны покрывать целые сутки: значение с меткой T относится к часу (T − 1 ч, T].
  */
-fun WeatherForecast.toAgentView(turbineId: String, detailed: Boolean): AgentWeatherView {
+fun WeatherForecast.toAgentView(turbineId: String, detailed: Boolean, zone: ZoneId = ZoneOffset.UTC): AgentWeatherView {
     val summary = summarize(hours)
-    val days = hours.groupBy { dayOf(it) }
+    val hour = hourFormat(zone)
+    val days = hours.groupBy { dayOf(it, zone) }
     return AgentWeatherView(
         turbineId = turbineId,
         forecastAt = forecastAt,
@@ -55,22 +61,22 @@ fun WeatherForecast.toAgentView(turbineId: String, detailed: Boolean): AgentWeat
         runPublishedAt = runAvailableAt,
         skippedRuns = skippedRuns.map { "${it.runInitAt}: ${it.reason}" },
         // Итог за период — только если дней несколько: иначе модель путает его со строкой дня
-        conclusions = dailyConclusions(hours) + if (days.size > 1) periodConclusions(summary, days.keys) else emptyList(),
+        conclusions = dailyConclusions(hours, zone) + if (days.size > 1) periodConclusions(summary, days.keys, zone) else emptyList(),
         summary = summary,
-        hourlyFormat = if (detailed) "время UTC | ветер 100 м, м/с | порывы 10 м, м/с | направление ° | температура °C | влажность %" else null,
+        hourlyFormat = if (detailed) "время (${zoneLabel(zone)}) | ветер 100 м, м/с | порывы 10 м, м/с | направление ° | температура °C | влажность %" else null,
         hourly = if (!detailed) null else hours.map {
-            "${HOUR.format(it.timestamp)} | ${it.windSpeed100m ?: "-"} | ${it.windGusts10m ?: "-"} | " +
+            "${hour.format(it.timestamp)} | ${it.windSpeed100m ?: "-"} | ${it.windGusts10m ?: "-"} | " +
                 "${it.windDirection100m?.toInt() ?: "-"} | ${it.temperature2m ?: "-"} | ${it.relativeHumidity2m?.toInt() ?: "-"}"
         },
     )
 }
 
-private fun periodConclusions(s: WeatherSummary, days: Collection<String>): List<String> =
-    conclusions(s).map { "За весь период ${days.first()}–${days.last()}: $it" }
+private fun periodConclusions(s: WeatherSummary, days: Collection<String>, zone: ZoneId): List<String> =
+    conclusions(s, zone).map { "За весь период ${days.first()}–${days.last()}: $it" }
 
-internal fun conclusions(s: WeatherSummary): List<String> = buildList {
+internal fun conclusions(s: WeatherSummary, zone: ZoneId = ZoneOffset.UTC): List<String> = buildList {
     if (s.meanWind100m != null && s.maxWind100m != null) {
-        add("Ветер на 100 м: в среднем ${s.meanWind100m} м/с, максимум ${s.maxWind100m} м/с в ${HOUR.format(s.maxWind100mAt)} UTC.")
+        add("Ветер на 100 м: в среднем ${s.meanWind100m} м/с, максимум ${s.maxWind100m} м/с в ${hourFormat(zone).format(s.maxWind100mAt)} ${zoneLabel(zone)}.")
     }
     s.maxGust10m?.let { add("Максимальные порывы у земли (10 м): $it м/с.") }
     if (s.minTemperature != null && s.maxTemperature != null) {
@@ -112,17 +118,15 @@ internal fun summarize(hours: List<WeatherHour>): WeatherSummary {
     )
 }
 
-private val DAY: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM.yyyy").withZone(ZoneOffset.UTC)
+/** Сутки, к которым относится час: значение в 00:00 закрывает последний час предыдущих суток. */
+private fun dayOf(h: WeatherHour, zone: ZoneId): String = dayFormat(zone).format(h.timestamp.minusSeconds(3600))
 
-/** Сутки UTC, к которым относится час: значение в 00:00 закрывает последний час предыдущих суток. */
-private fun dayOf(h: WeatherHour): String = DAY.format(h.timestamp.minusSeconds(3600))
-
-/** Итоги по каждым суткам UTC: модель плохо сама определяет, к какому дню относятся часы горизонта. */
-internal fun dailyConclusions(hours: List<WeatherHour>): List<String> =
-    hours.groupBy { dayOf(it) }.map { (day, dayHours) ->
+/** Итоги по каждым суткам: модель плохо сама определяет, к какому дню относятся часы горизонта. */
+internal fun dailyConclusions(hours: List<WeatherHour>, zone: ZoneId = ZoneOffset.UTC): List<String> =
+    hours.groupBy { dayOf(it, zone) }.map { (day, dayHours) ->
         val s = summarize(dayHours)
         val wind = if (s.maxWind100m != null) {
-            "ветер на 100 м в среднем ${s.meanWind100m} м/с, максимум ${s.maxWind100m} м/с в ${HOUR.format(s.maxWind100mAt)} UTC"
+            "ветер на 100 м в среднем ${s.meanWind100m} м/с, максимум ${s.maxWind100m} м/с в ${hourFormat(zone).format(s.maxWind100mAt)} ${zoneLabel(zone)}"
         } else {
             "нет данных о ветре"
         }
