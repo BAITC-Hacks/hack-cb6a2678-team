@@ -56,7 +56,7 @@ python -m windml.train_dataset --csv data/raw/turbine_2.csv --name turbine_2 --w
 ## Связь бэкенда с ML
 
 ```text
-Backend :8080 POST /ml/forecast
+Backend (backend/, Spring Boot) :8080
    → HTTP → FastAPI :8000 POST /v1/forecast
    → архивный/живой прогноз погоды → обученная модель → JSON из 48 значений
 ```
@@ -68,10 +68,9 @@ python -m uvicorn windml.api:app --host 127.0.0.1 --port 8000
 ```
 
 Swagger: `http://127.0.0.1:8000/docs`.
-Запуск Java-бэкенда описан в `spring-agent/README.md`.
-Его `WINDML_URL` по умолчанию — `http://localhost:8000`.
+Бэкенд — `backend/` в корне репозитория (см. `docs/ml-integration.md`).
 
-Прямой запрос к ML (для запроса через Java замените URL на `http://localhost:8080/ml/forecast`):
+Прямой запрос к ML:
 
 ```powershell
 $body = @{site='turbine_2'; issue_date='2026-01-31'; weather_source='previous_runs'} | ConvertTo-Json
@@ -104,15 +103,7 @@ HTTP-тесты проверяют обе сохранённые модели н
 48-часовой ответ, квантили, валидацию запросов и ошибки недоступности.
 Тесты FastAPI используют [официальный TestClient](https://fastapi.tiangolo.com/tutorial/testing/).
 
-Для сквозной проверки настоящего HTTP-соединения после сборки Java:
-
-```powershell
-python tests/smoke_backend.py
-```
-
-Проверка временно запускает оба сервиса, получает прогнозы двух турбин через
-Java-бэкенд, проверяет HTTP 422 и 503 и останавливает запущенные процессы.
-Результаты — `outputs/integration/summary.json`. LLM в этой проверке не вызывается.
+Сквозная проверка бэкенд ↔ ML — в `backend/` (см. `docs/ml-integration.md`).
 
 ## Соответствие описанному ТЗ: что ещё не закрыто
 

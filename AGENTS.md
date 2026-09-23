@@ -31,6 +31,7 @@ contracts/ml-service.openapi.yaml       — контракт ML-сервиса (
 backend/src/main/resources/static/openapi.yaml — контракт публичного API (фронт ↔ бэкенд), источник правды
 backend/                    — Spring Boot 4.1, Kotlin 2.3, Spring AI 2.0.1, Java toolchain 17
 data/weather-cache/         — кэш ответов Open-Meteo (коммитится — офлайн-воспроизводимость)
+ML/                         — Python ML-сервис (FastAPI :8000), модели, кэш погоды для обучения
 docs/                       — документация
 ```
 
@@ -42,10 +43,9 @@ docs/                       — документация
   (Open-Meteo Single Runs API) с защитой от утечки и кэшем в `data/weather-cache/`.
 - Агент получает реальную погоду инструментом `getWeather` (календарные дни, готовые выводы по дням).
   Прогноз мощности и метрики у агента пока на моках.
-- Добавлен самостоятельный ML-прототип в `ML/`: обучение, модели двух турбин, погодный кэш,
-  FastAPI `/v1/forecast`, офлайн-тесты и отдельный пример Spring AI-агента.
-  Запуск и результаты — `ML/README.md`, `ML/TRAINING.md`; интеграция с основным `backend/`
-  по контракту `/predict` ещё не выполнена.
+- ML в `ML/`: обучение, модели двух турбин, погодный кэш (Previous Runs, ECMWF/GFS/ICON), FastAPI `/v1/forecast`,
+  офлайн-тесты. Запуск и результаты — `ML/README.md`, `ML/TRAINING.md`. Агент один — в `backend/`
+  (Java-агент из `ML/spring-agent` удалён). С бэкендом пока не состыкован — план: `docs/ml-integration.md`.
 - Не сделано: интеграция ML с основным бэкендом, реальный цикл агента и backtest в нём.
 - План и статус этапов — `docs/roadmap.md`.
 

@@ -1,24 +1,32 @@
 openapi: 3.0.3
 info:
-  title: WES ML Service
+  title: WES ML Service (windml)
   description: >
-    Внутренний Python-сервис (FastAPI) с моделью прогноза мощности.
-    Вызывается только бэкендом (инструмент агента `predict`).
+    Внутренний Python-сервис (FastAPI, `ML/windml/api.py`) с моделью прогноза мощности.
+    Вызывается только бэкендом (`backend/`): инструмент агента `predict` и расчёт метрик.
 
 
-    Бэкенд передаёт почасовой прогноз погоды «как есть» из Open-Meteo;
-    подготовка признаков (ветер на высоте ступицы, плотность воздуха,
-    календарные признаки) — внутри ML-сервиса, чтобы обучение и инференс
-    использовали один и тот же код.
+    **Семантика прогноза.** Прогноз выпускается в день D в 12:00 по местному времени
+    станции (`local_tz`) и покрывает сутки D+1 и D+2 (00:00–23:00 местного) — 48 часов.
+    Погоду ML достаёт сам (Open-Meteo Previous Runs, режим `strict`), бэкенд передаёт только
+    турбину и дату выпуска.
 
 
-    Все метки времени — UTC. Модель обучается только на данных до
-    2026-01-31T23:00:00Z включительно.
-  version: 1.0.0
+    **Время.** Поля с суффиксом `_utc` — ISO-8601 в UTC с `Z`. Бэкенд опирается только на них.
+    Поля без суффикса (`time`, `target_start`, …) — местное время, оставлены для совместимости.
+
+
+    **Честность.** `weather_issued_before_utc` ≤ `issued_at_utc` всегда. Модель обучена только на
+    данных до `trained_until_utc` (не позже 2026-01-31T23:59Z).
+
+
+    **Версия 2.0.** Поля, отмеченные «v2» в описании, добавляются в ML по `docs/ml-tasks.md`.
+    До их выхода бэкенд обязан переносить их отсутствие (читать как null).
+  version: 2.0.0
 
 servers:
   - url: http://localhost:8000
-    description: Локальный запуск
+    description: Локальный запуск (uvicorn windml.api:app --port 8000)
   - url: http://ml:8000
     description: Внутри docker compose
 
@@ -26,181 +34,436 @@ paths:
 
   /health:
     get:
-      summary: Состояние сервиса и версия модели
+      summary: Живость сервиса
       operationId: health
       responses:
         '200':
-          description: Сервис готов
+          description: Сервис запущен
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HealthResponse'
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
 
-  /predict:
+  /v1/models:
+    get:
+      summary: Какие модели обучены
+      operationId: listModels
+      responses:
+        '200':
+          description: Список турбин и наличие модели
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [models]
+                properties:
+                  models:
+                    type: array
+                    items:
+                      type: object
+                      required: [site, available]
+                      properties:
+                        site:
+                          $ref: '#/components/schemas/Site'
+                        available:
+                          type: boolean
+
+  /v1/models/{site}:
+    get:
+      summary: Метаданные рабочей модели
+      operationId: getModel
+      parameters:
+        - $ref: '#/components/parameters/Site'
+      responses:
+        '200':
+          description: Метаданные модели
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelInfo'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /v1/forecast:
     post:
-      summary: Почасовой прогноз нормализованной мощности с квантилями
-      operationId: predict
+      summary: Прогноз на сутки D+1 и D+2 от выпуска в день D
+      operationId: forecast
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PredictRequest'
+              $ref: '#/components/schemas/ForecastRequest'
             example:
-              turbineId: "t1"
-              forecastIssuedAt: "2026-02-01T00:00:00Z"
-              weatherIssuedAt: "2026-01-31T18:00:00Z"
-              hours:
-                - timestamp: "2026-02-01T01:00:00Z"
-                  windSpeed10m: 5.1
-                  windSpeed80m: 7.4
-                  windSpeed100m: 7.9
-                  windSpeed120m: 8.2
-                  windDirection100m: 245
-                  windGusts10m: 9.8
-                  temperature2m: -12.3
-                  relativeHumidity2m: 81
-                  surfacePressure: 948.2
+              site: "turbine_1"
+              issue_date: "2026-01-31"
+              weather_source: "previous_runs"
       responses:
         '200':
-          description: Прогноз по каждому часу из запроса, в том же порядке
+          description: 48 почасовых значений и автоматический анализ
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PredictResponse'
-              example:
-                turbineId: "t1"
-                modelVersion: "lgbm-v1"
-                points:
-                  - timestamp: "2026-02-01T01:00:00Z"
-                    p10: 0.30
-                    p50: 0.42
-                    p90: 0.55
-                    windSpeedHub: 8.0
+                $ref: '#/components/schemas/ForecastResponse'
         '422':
-          description: Некорректный запрос (неизвестная турбина, пустой список часов и т.п.)
+          $ref: '#/components/responses/ValidationError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /v1/evaluation/{site}:
+    get:
+      summary: "v2: почасовые прогнозы и факт на отложенном тесте"
+      description: >
+        Прогнозы тестовой модели (обучена строго до начала теста) на тестовом периоде вместе с фактом.
+        Бэкенд считает по ним метрики для экрана «Качество»: за февраль факта нет.
+        Каждый час теста встречается дважды: для `lead_day` 1 и 2.
+      operationId: getEvaluation
+      parameters:
+        - $ref: '#/components/parameters/Site'
+      responses:
+        '200':
+          description: Строки теста
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '503':
+          $ref: '#/components/responses/Unavailable'
 
 components:
+
+  parameters:
+    Site:
+      name: site
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Site'
+
+  responses:
+    ValidationError:
+      description: Неверный запрос (неизвестная турбина, лишние поля, неверная дата)
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail: {}
+    Unavailable:
+      description: Модель не обучена или нет погоды на запрошенные сутки
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [detail]
+            properties:
+              detail:
+                type: string
+                example: "Incomplete weather data for the requested 48-hour forecast"
+
   schemas:
 
-    HealthResponse:
+    Site:
+      type: string
+      enum: [turbine_1, turbine_2]
+      description: "turbine_1 ↔ t1 в публичном API бэкенда, turbine_2 ↔ t2"
+
+    ForecastRequest:
       type: object
-      required: [status, modelVersion, trainedUntil, turbines]
+      additionalProperties: false
+      required: [site, issue_date]
+      properties:
+        site:
+          $ref: '#/components/schemas/Site'
+        issue_date:
+          type: string
+          format: date
+          description: День выпуска D (прогноз «как если бы» в D 12:00 местного)
+          example: "2026-01-31"
+        weather_source:
+          type: string
+          enum: [previous_runs, live]
+          default: previous_runs
+          description: previous_runs — архивные прогнозы (backtest); live — текущий прогноз
+
+    ForecastResponse:
+      type: object
+      required: [site, issue_date, issued_at_utc, local_tz, target_start_utc, target_end_utc,
+                 unit, model_version, weather_source, weather_issued_before_utc, leakage_mode,
+                 weather_hash, analysis, hourly]
+      properties:
+        site:
+          $ref: '#/components/schemas/Site'
+        issue_date:
+          type: string
+          format: date
+          example: "2026-01-31"
+        issued_at_utc:
+          type: string
+          format: date-time
+          description: "v2. Момент выпуска D 12:00 местного, в UTC"
+          example: "2026-01-31T07:00:00Z"
+        local_tz:
+          type: string
+          description: "v2. Часовой пояс, в котором заданы D 12:00 и сутки D+1/D+2 (IANA или Etc/GMT±N)"
+          example: "Asia/Almaty"
+        target_start:
+          type: string
+          description: Первый час цели, местное время (совместимость)
+          example: "2026-02-01 00:00:00"
+        target_end:
+          type: string
+          description: Последний час цели, местное время (совместимость)
+          example: "2026-02-02 23:00:00"
+        target_start_utc:
+          type: string
+          format: date-time
+          description: "v2"
+          example: "2026-01-31T19:00:00Z"
+        target_end_utc:
+          type: string
+          format: date-time
+          description: "v2"
+          example: "2026-02-02T18:00:00Z"
+        unit:
+          type: string
+          enum: [fraction_of_rated_power]
+        model_version:
+          type: string
+          description: "v2. Стабильный идентификатор рабочей модели (показывается в UI)"
+          example: "lgbm-2026-09-23"
+        model_trained_at:
+          type: string
+          nullable: true
+          example: "2026-09-23T10:57:06+00:00"
+        weather_source:
+          type: string
+          example: "open-meteo-previous-runs"
+        weather_models:
+          type: array
+          description: "v2. Модели погоды в ансамбле"
+          items:
+            type: string
+          example: ["ecmwf_ifs025", "gfs_seamless", "icon_seamless"]
+        weather_issued_before_utc:
+          type: string
+          format: date-time
+          description: >
+            v2. Самый поздний возможный момент выпуска использованных прогнозов погоды.
+            Всегда ≤ issued_at_utc — доказательство отсутствия утечки.
+          example: "2026-01-30T23:00:00Z"
+        leakage_mode:
+          type: string
+          enum: [strict, standard]
+          description: "v2"
+        weather_site:
+          type: string
+          example: "turbine_1"
+        weather_site_assumption:
+          type: string
+          nullable: true
+        weather_hash:
+          type: string
+          description: Хэш входной погоды; меняется — значит, входные данные обновились
+          example: "4fee95592457d6f5"
+        analysis:
+          $ref: '#/components/schemas/Analysis'
+        hourly:
+          type: array
+          minItems: 48
+          maxItems: 48
+          items:
+            $ref: '#/components/schemas/HourlyForecast'
+
+    HourlyForecast:
+      type: object
+      required: [time_utc, lead_day, forecast, p10, p50, p90]
+      description: Значение относится к часу, начинающемуся в `time_utc`
+      properties:
+        time:
+          type: string
+          description: Местное время (совместимость)
+          example: "2026-02-01 00:00:00"
+        time_utc:
+          type: string
+          format: date-time
+          description: "v2"
+          example: "2026-01-31T19:00:00Z"
+        lead_day:
+          type: integer
+          enum: [1, 2]
+        forecast:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Основной прогноз (среднее); бэкенд показывает его как predictedPower
+        p10:
+          type: number
+          minimum: 0
+          maximum: 1
+        p50:
+          type: number
+          minimum: 0
+          maximum: 1
+        p90:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: "Инвариант: p10 ≤ p50 ≤ p90 и p10 ≤ forecast ≤ p90"
+        wind_speed_100m:
+          type: number
+          nullable: true
+          description: "v2. Средний по ансамблю прогноз ветра на 100 м, м/с"
+        wind_spread:
+          type: number
+          nullable: true
+          description: "v2. Разброс ветра между моделями ансамбля (СКО), м/с"
+        temperature_2m:
+          type: number
+          nullable: true
+          description: "v2. Средняя по ансамблю температура на 2 м, °C"
+
+    Analysis:
+      type: object
+      required: [status, recommended_action, issues, stats]
       properties:
         status:
           type: string
-          example: "ok"
-        modelVersion:
+          enum: [ok, warning, critical]
+        recommended_action:
           type: string
-          example: "lgbm-v1"
-        trainedUntil:
+          description: Например accept, accept_and_recheck_on_update, recheck_weather
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalysisIssue'
+        info:
+          type: array
+          items: {}
+        stats:
+          type: object
+          description: Сводка (mean_power, peak_hour, peak_value, hours_below_5pct, ...). Бэкенд считает свою сводку сам
+          additionalProperties: true
+
+    AnalysisIssue:
+      type: object
+      required: [level, code, message]
+      properties:
+        level:
+          type: string
+          enum: [info, warning, critical]
+        code:
+          type: string
+          description: >
+            Известные коды (бэкенд маппит их в алерты): HIGH_NWP_DISAGREEMENT, WIDE_INTERVAL,
+            ML_VS_PHYSICS_GAP. Новые коды допустимы — бэкенд покажет их как info.
+          example: "HIGH_NWP_DISAGREEMENT"
+        message:
+          type: string
+          description: Текст на русском для диспетчера
+        from_utc:
           type: string
           format: date-time
-          description: Последний час данных, на которых обучена модель
+          nullable: true
+          description: "v2. Начало затронутого интервала, если применимо"
+        to_utc:
+          type: string
+          format: date-time
+          nullable: true
+          description: "v2. Последний затронутый час включительно"
+
+    ModelInfo:
+      type: object
+      required: [site]
+      properties:
+        site:
+          $ref: '#/components/schemas/Site'
+        model_version:
+          type: string
+          description: "v2"
+        trained_at:
+          type: string
+          nullable: true
+        trained_until_utc:
+          type: string
+          format: date-time
+          description: "v2. Последний час обучающих данных"
           example: "2026-01-31T23:00:00Z"
-        turbines:
+        local_tz:
+          type: string
+          description: "v2"
+        weather_models:
           type: array
           items:
             type: string
-          example: ["t1", "t2"]
+      additionalProperties: true
 
-    WeatherHour:
+    EvaluationResponse:
       type: object
-      description: >
-        Один час прогноза погоды из Open-Meteo. Обязательны timestamp,
-        windSpeed100m и temperature2m; остальные поля — если источник их отдал.
-      required: [timestamp, windSpeed100m, temperature2m]
+      required: [site, model_version, trained_until_utc, period_start_utc, period_end_utc, rows]
       properties:
-        timestamp:
+        site:
+          $ref: '#/components/schemas/Site'
+        model_version:
+          type: string
+          description: Версия тестовой модели (не рабочей)
+        trained_until_utc:
           type: string
           format: date-time
-        windSpeed10m:
-          type: number
-          nullable: true
-          description: м/с
-        windSpeed80m:
-          type: number
-          nullable: true
-          description: м/с
-        windSpeed100m:
-          type: number
-          description: м/с
-        windSpeed120m:
-          type: number
-          nullable: true
-          description: м/с
-        windDirection100m:
-          type: number
-          nullable: true
-          description: градусы, 0..360
-        windGusts10m:
-          type: number
-          nullable: true
-          description: м/с
-        temperature2m:
-          type: number
-          description: °C
-        relativeHumidity2m:
-          type: number
-          nullable: true
-          description: "%"
-        surfacePressure:
-          type: number
-          nullable: true
-          description: гПа
-
-    PredictRequest:
-      type: object
-      required: [turbineId, forecastIssuedAt, weatherIssuedAt, hours]
-      properties:
-        turbineId:
-          type: string
-          example: "t1"
-        forecastIssuedAt:
+          description: Тестовая модель обучена строго до начала теста
+          example: "2025-12-31T23:00:00Z"
+        period_start_utc:
           type: string
           format: date-time
-          description: Момент прогноза; для признаков вроде заблаговременности
-        weatherIssuedAt:
+        period_end_utc:
           type: string
           format: date-time
-          description: Время выпуска прогноза погоды
-        hours:
+        rows:
           type: array
-          minItems: 1
-          maxItems: 72
           items:
-            $ref: '#/components/schemas/WeatherHour'
+            $ref: '#/components/schemas/EvaluationRow'
 
-    PredictPoint:
+    EvaluationRow:
       type: object
-      required: [timestamp, p10, p50, p90]
+      required: [time_utc, issue_date, lead_day, forecast, p10, p50, p90, actual, pc_baseline, anomaly]
       properties:
-        timestamp:
+        time_utc:
           type: string
           format: date-time
+        issue_date:
+          type: string
+          format: date
+          description: День выпуска, из которого получен этот прогноз
+        lead_day:
+          type: integer
+          enum: [1, 2]
+        forecast:
+          type: number
         p10:
           type: number
-          description: 0..1, p10 ≤ p50 ≤ p90
         p50:
           type: number
-          description: 0..1
         p90:
           type: number
-          description: 0..1
-        windSpeedHub:
+        actual:
           type: number
           nullable: true
-          description: Ветер на высоте ступицы, который посчитала модель, м/с
-
-    PredictResponse:
-      type: object
-      required: [turbineId, modelVersion, points]
-      properties:
-        turbineId:
-          type: string
-        modelVersion:
-          type: string
-        points:
-          type: array
-          items:
-            $ref: '#/components/schemas/PredictPoint'
+          description: Факт нормализованной мощности; null — нет данных SCADA
+        pc_baseline:
+          type: number
+          description: Кривая мощности по прогнозу ветра без ML (бейзлайн)
+        anomaly:
+          type: boolean
+          description: Час похож на простой/ограничение (для оценки не исключается)
+        wind_speed_100m:
+          type: number
+          nullable: true

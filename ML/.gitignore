@@ -6,7 +6,6 @@ venv/
 __pycache__/
 *.py[cod]
 .pytest_cache/
-spring-agent/target/
 
 # Логи и временные файлы тестов
 *.log
