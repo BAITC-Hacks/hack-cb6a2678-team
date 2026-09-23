@@ -1,0 +1,206 @@
+openapi: 3.0.3
+info:
+  title: WES ML Service
+  description: >
+    Внутренний Python-сервис (FastAPI) с моделью прогноза мощности.
+    Вызывается только бэкендом (инструмент агента `predict`).
+
+
+    Бэкенд передаёт почасовой прогноз погоды «как есть» из Open-Meteo;
+    подготовка признаков (ветер на высоте ступицы, плотность воздуха,
+    календарные признаки) — внутри ML-сервиса, чтобы обучение и инференс
+    использовали один и тот же код.
+
+
+    Все метки времени — UTC. Модель обучается только на данных до
+    2026-01-31T23:00:00Z включительно.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8000
+    description: Локальный запуск
+  - url: http://ml:8000
+    description: Внутри docker compose
+
+paths:
+
+  /health:
+    get:
+      summary: Состояние сервиса и версия модели
+      operationId: health
+      responses:
+        '200':
+          description: Сервис готов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /predict:
+    post:
+      summary: Почасовой прогноз нормализованной мощности с квантилями
+      operationId: predict
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PredictRequest'
+            example:
+              turbineId: "t1"
+              forecastIssuedAt: "2026-02-01T00:00:00Z"
+              weatherIssuedAt: "2026-01-31T18:00:00Z"
+              hours:
+                - timestamp: "2026-02-01T01:00:00Z"
+                  windSpeed10m: 5.1
+                  windSpeed80m: 7.4
+                  windSpeed100m: 7.9
+                  windSpeed120m: 8.2
+                  windDirection100m: 245
+                  windGusts10m: 9.8
+                  temperature2m: -12.3
+                  relativeHumidity2m: 81
+                  surfacePressure: 948.2
+      responses:
+        '200':
+          description: Прогноз по каждому часу из запроса, в том же порядке
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PredictResponse'
+              example:
+                turbineId: "t1"
+                modelVersion: "lgbm-v1"
+                points:
+                  - timestamp: "2026-02-01T01:00:00Z"
+                    p10: 0.30
+                    p50: 0.42
+                    p90: 0.55
+                    windSpeedHub: 8.0
+        '422':
+          description: Некорректный запрос (неизвестная турбина, пустой список часов и т.п.)
+
+components:
+  schemas:
+
+    HealthResponse:
+      type: object
+      required: [status, modelVersion, trainedUntil, turbines]
+      properties:
+        status:
+          type: string
+          example: "ok"
+        modelVersion:
+          type: string
+          example: "lgbm-v1"
+        trainedUntil:
+          type: string
+          format: date-time
+          description: Последний час данных, на которых обучена модель
+          example: "2026-01-31T23:00:00Z"
+        turbines:
+          type: array
+          items:
+            type: string
+          example: ["t1", "t2"]
+
+    WeatherHour:
+      type: object
+      description: >
+        Один час прогноза погоды из Open-Meteo. Обязательны timestamp,
+        windSpeed100m и temperature2m; остальные поля — если источник их отдал.
+      required: [timestamp, windSpeed100m, temperature2m]
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        windSpeed10m:
+          type: number
+          nullable: true
+          description: м/с
+        windSpeed80m:
+          type: number
+          nullable: true
+          description: м/с
+        windSpeed100m:
+          type: number
+          description: м/с
+        windSpeed120m:
+          type: number
+          nullable: true
+          description: м/с
+        windDirection100m:
+          type: number
+          nullable: true
+          description: градусы, 0..360
+        windGusts10m:
+          type: number
+          nullable: true
+          description: м/с
+        temperature2m:
+          type: number
+          description: °C
+        relativeHumidity2m:
+          type: number
+          nullable: true
+          description: "%"
+        surfacePressure:
+          type: number
+          nullable: true
+          description: гПа
+
+    PredictRequest:
+      type: object
+      required: [turbineId, forecastIssuedAt, weatherIssuedAt, hours]
+      properties:
+        turbineId:
+          type: string
+          example: "t1"
+        forecastIssuedAt:
+          type: string
+          format: date-time
+          description: Момент прогноза; для признаков вроде заблаговременности
+        weatherIssuedAt:
+          type: string
+          format: date-time
+          description: Время выпуска прогноза погоды
+        hours:
+          type: array
+          minItems: 1
+          maxItems: 72
+          items:
+            $ref: '#/components/schemas/WeatherHour'
+
+    PredictPoint:
+      type: object
+      required: [timestamp, p10, p50, p90]
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        p10:
+          type: number
+          description: 0..1, p10 ≤ p50 ≤ p90
+        p50:
+          type: number
+          description: 0..1
+        p90:
+          type: number
+          description: 0..1
+        windSpeedHub:
+          type: number
+          nullable: true
+          description: Ветер на высоте ступицы, который посчитала модель, м/с
+
+    PredictResponse:
+      type: object
+      required: [turbineId, modelVersion, points]
+      properties:
+        turbineId:
+          type: string
+        modelVersion:
+          type: string
+        points:
+          type: array
+          items:
+            $ref: '#/components/schemas/PredictPoint'

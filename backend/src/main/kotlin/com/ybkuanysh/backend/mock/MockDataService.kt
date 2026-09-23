@@ -3,9 +3,16 @@ package com.ybkuanysh.backend.mock
 import com.ybkuanysh.backend.dto.AgentLogResponse
 import com.ybkuanysh.backend.dto.AgentStep
 import com.ybkuanysh.backend.dto.AgentStepStatus
+import com.ybkuanysh.backend.dto.AlertSeverity
+import com.ybkuanysh.backend.dto.AlertType
 import com.ybkuanysh.backend.dto.DailyMetric
+import com.ybkuanysh.backend.dto.ForecastAlert
 import com.ybkuanysh.backend.dto.ForecastPoint
 import com.ybkuanysh.backend.dto.ForecastResponse
+import com.ybkuanysh.backend.dto.ForecastRevision
+import com.ybkuanysh.backend.dto.ForecastRevisionsResponse
+import com.ybkuanysh.backend.dto.ForecastSummary
+import com.ybkuanysh.backend.dto.LeadTimeMetric
 import com.ybkuanysh.backend.dto.MetricsResponse
 import com.ybkuanysh.backend.dto.RunForecastResponse
 import com.ybkuanysh.backend.dto.Turbine
@@ -15,6 +22,7 @@ import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Random
 import java.util.concurrent.ConcurrentHashMap
@@ -44,42 +52,85 @@ class MockDataService(private val clock: Clock) {
     fun requireTurbine(turbineId: String): Turbine =
         turbines.find { it.id == turbineId } ?: throw NotFoundException("Turbine not found: turbineId=$turbineId")
 
-    fun forecast(turbineId: String, date: LocalDate, horizonHours: Int): ForecastResponse {
+    fun forecast(turbineId: String, date: LocalDate, horizonHours: Int, revision: Int = 1): ForecastResponse {
         requireTurbine(turbineId)
-        val issuedAt = date.atStartOfDay().toInstant(ZoneOffset.UTC)
+        val issuedAt = issuedAt(date, revision)
+        val weatherIssuedAt = issuedAt.minus(WEATHER_PUBLICATION_LAG)
         val points = (1..horizonHours).map { lead ->
             val ts = issuedAt.plus(lead.toLong(), ChronoUnit.HOURS)
-            val wind = windSpeed(turbineId, ts)
-            val windErr = gaussian(turbineId, "fc", issuedAt.epochSecond, ts.epochSecond) * (0.2 + 0.012 * lead)
+            // Ошибка прогноза ветра растёт с заблаговременностью от выпуска погодного прогона
+            val weatherLead = Duration.between(weatherIssuedAt, ts).toHours()
+            val sigma = 0.4 + 0.02 * weatherLead
+            val wind = (windSpeed(turbineId, ts) + gaussian(turbineId, "fc", weatherIssuedAt.epochSecond, ts.epochSecond) * sigma)
+                .coerceAtLeast(0.0)
+            val band = listOf(powerCurve(wind - Z80 * sigma), powerCurve(wind + Z80 * sigma))
             ForecastPoint(
                 timestamp = ts,
-                predictedPower = r3(powerCurve(wind + windErr)),
+                predictedPower = r3(powerCurve(wind)),
+                p10 = r3(band.min()),
+                p90 = r3(band.max()),
                 actualPower = if (ts.isBefore(ACTUALS_UNTIL)) r3(actualPower(turbineId, ts)) else null,
-                windSpeed = r1((wind + windErr).coerceAtLeast(0.0)),
+                windSpeed = r1(wind),
                 temperature = r1(temperature(turbineId, ts)),
             )
         }
-        return ForecastResponse(turbineId, issuedAt, horizonHours, points)
+        val summary = summary(points)
+        val alerts = alerts(points)
+        return ForecastResponse(
+            turbineId = turbineId,
+            forecastIssuedAt = issuedAt,
+            revision = revision,
+            horizonHours = horizonHours,
+            weatherSource = WEATHER_SOURCE,
+            weatherIssuedAt = weatherIssuedAt,
+            modelVersion = MODEL_VERSION,
+            summary = summary,
+            alerts = alerts,
+            agentReport = report(summary, alerts),
+            points = points,
+        )
     }
 
+    fun revisions(turbineId: String, date: LocalDate): ForecastRevisionsResponse {
+        requireTurbine(turbineId)
+        var previous: Double? = null
+        val revisions = (1..REVISIONS_PER_DAY).map { rev ->
+            val fc = forecast(turbineId, date, 48, rev)
+            val mean = fc.summary.meanPower
+            val change = previous?.let { if (it > 0.0) r1((mean - it) / it * 100) else null }
+            previous = mean
+            ForecastRevision(rev, fc.forecastIssuedAt, fc.weatherIssuedAt, mean, change)
+        }
+        return ForecastRevisionsResponse(turbineId, date, revisions)
+    }
+
+    /** Основные метрики — по горизонту 1–24 ч первой (плановой) ревизии; byLeadTime — по 1–48 ч. */
     fun metrics(turbineId: String?, from: LocalDate, to: LocalDate): MetricsResponse {
         val ids = if (turbineId != null) listOf(requireTurbine(turbineId).id) else turbines.map { it.id }
         val allErr = mutableListOf<Double>()
         val allPct = mutableListOf<Double>()
         val baselineErr = mutableListOf<Double>()
+        val powerCurveErr = mutableListOf<Double>()
+        var covered = 0
+        val byLead = Array(48) { mutableListOf<Double>() }
         val byDay = mutableListOf<DailyMetric>()
 
         var day = from
         while (!day.isAfter(to)) {
             val dayErr = mutableListOf<Double>()
             for (id in ids) {
-                val fc = forecast(id, day, 24)
+                val fc = forecast(id, day, 48)
                 val persistence = actualPower(id, fc.forecastIssuedAt)
-                for (p in fc.points) {
-                    val actual = p.actualPower ?: continue
+                fc.points.forEachIndexed { i, p ->
+                    val actual = p.actualPower ?: return@forEachIndexed
                     val e = p.predictedPower - actual
+                    byLead[i] += e
+                    if (i >= 24) return@forEachIndexed
                     dayErr += e
                     baselineErr += persistence - actual
+                    // «Сырая» кривая мощности по ветру на 10 м без поправки на высоту ступицы
+                    powerCurveErr += powerCurve(p.windSpeed * 0.85) - actual
+                    if (actual in p.p10!!..p.p90!!) covered++
                     if (actual > 0.1) allPct += abs(e) / actual
                 }
             }
@@ -98,15 +149,18 @@ class MockDataService(private val clock: Clock) {
             rmse = r3(rmse(allErr)),
             mape = r1(if (allPct.isEmpty()) 0.0 else allPct.average() * 100),
             baselineMae = r3(mae(baselineErr)),
+            powerCurveBaselineMae = r3(mae(powerCurveErr)),
+            intervalCoverage = if (allErr.isEmpty()) null else r3(covered.toDouble() / allErr.size),
             byDay = byDay,
+            byLeadTime = byLead.mapIndexedNotNull { i, e -> if (e.isEmpty()) null else LeadTimeMetric(i + 1, r3(mae(e))) },
         )
     }
 
-    fun agentLog(date: LocalDate, turbineId: String?): AgentLogResponse {
+    fun agentLog(date: LocalDate, turbineId: String?, revision: Int = 1): AgentLogResponse {
         turbineId?.let { requireTurbine(it) }
         val manual = if (turbineId != null) manualRuns[runKey(date, turbineId)]
         else manualRuns.values.filter { it.date == date }.maxByOrNull { it.startedAt }
-        return manual?.let { manualLog(it) } ?: scheduledLog(date, turbineId)
+        return manual?.let { manualLog(it) } ?: scheduledLog(date, turbineId, revision)
     }
 
     fun runCycle(turbineId: String, date: LocalDate, horizonHours: Int): RunForecastResponse {
@@ -115,6 +169,62 @@ class MockDataService(private val clock: Clock) {
         val run = ManualRun("cycle_$now", turbineId, date, horizonHours, now)
         manualRuns[runKey(date, turbineId)] = run
         return RunForecastResponse(run.cycleId, "processing")
+    }
+
+    // --- сводка, алерты, отчёт ---
+
+    private fun summary(points: List<ForecastPoint>): ForecastSummary {
+        val peak = points.maxBy { it.predictedPower }
+        return ForecastSummary(
+            meanPower = r3(points.map { it.predictedPower }.average()),
+            minPower = points.minOf { it.predictedPower },
+            maxPower = peak.predictedPower,
+            maxPowerAt = peak.timestamp,
+            fullLoadHours = r1(points.sumOf { it.predictedPower }),
+            lowPowerHours = points.count { it.predictedPower < LOW_POWER },
+        )
+    }
+
+    private fun alerts(points: List<ForecastPoint>): List<ForecastAlert> {
+        val result = mutableListOf<ForecastAlert>()
+        fun flag(type: AlertType, severity: AlertSeverity, minHours: Int, message: String, test: (Int) -> Boolean) {
+            var start = -1
+            for (i in 0..points.size) {
+                val on = i < points.size && test(i)
+                if (on && start < 0) start = i
+                if (!on && start >= 0) {
+                    if (i - start >= minHours) {
+                        result += ForecastAlert(type, severity, points[start].timestamp, points[i - 1].timestamp, message)
+                    }
+                    start = -1
+                }
+            }
+        }
+        flag(AlertType.storm_cutout, AlertSeverity.critical, 1, "Ветер близок к штормовому отключению турбины (≥ 23 м/с)") {
+            points[it].windSpeed >= 23.0
+        }
+        flag(AlertType.icing, AlertSeverity.warning, 3, "Риск обледенения лопастей: температура около 0 °C") {
+            points[it].temperature in -2.0..1.0 && points[it].windSpeed > 3.0
+        }
+        flag(AlertType.ramp_down, AlertSeverity.warning, 1, "Резкий спад выработки (≥ 0.3 за 3 ч)") {
+            it >= 3 && points[it - 3].predictedPower - points[it].predictedPower >= RAMP
+        }
+        flag(AlertType.ramp_up, AlertSeverity.info, 1, "Резкий рост выработки (≥ 0.3 за 3 ч)") {
+            it >= 3 && points[it].predictedPower - points[it - 3].predictedPower >= RAMP
+        }
+        flag(AlertType.low_confidence, AlertSeverity.info, 3, "Высокая неопределённость прогноза (P90 − P10 ≥ 0.5)") {
+            points[it].p90!! - points[it].p10!! >= 0.5
+        }
+        return result.sortedBy { it.from }
+    }
+
+    /** Шаблонный отчёт; в реальном цикле его пишет LLM-агент. */
+    private fun report(s: ForecastSummary, alerts: List<ForecastAlert>): String {
+        val main = "Средняя мощность ${s.meanPower}, пик ${s.maxPower} в ${HOUR.format(s.maxPowerAt)} UTC, " +
+            "часов с выработкой ниже ${LOW_POWER}: ${s.lowPowerHours}."
+        if (alerts.isEmpty()) return "$main Предупреждений нет."
+        val list = alerts.joinToString("; ") { "${it.message} (${HOUR.format(it.from)}–${HOUR.format(it.to)} UTC)" }
+        return "$main Предупреждения: $list."
     }
 
     // --- agent log ---
@@ -127,48 +237,65 @@ class MockDataService(private val clock: Clock) {
         val startedAt: Instant,
     )
 
+    private data class StepTemplate(val name: String, val tool: String?, val details: String)
+
     private fun runKey(date: LocalDate, turbineId: String) = "$date|$turbineId"
 
-    private fun stepTemplates(horizonHours: Int, turbineCount: Int) = listOf(
-        "Получение погодных данных" to "Источник: Open-Meteo archive, точек координат: $turbineCount",
-        "Подготовка данных" to "Нормализация, агрегация по часам",
-        "Запуск модели прогнозирования" to "Модель: LightGBM v3, горизонт ${horizonHours}ч",
-        "Анализ результата" to "Аномалий не обнаружено",
+    private fun issuedAt(date: LocalDate, revision: Int): Instant =
+        date.atStartOfDay().toInstant(ZoneOffset.UTC).plus(REVISION_STEP.multipliedBy(revision - 1L))
+
+    private fun stepTemplates(horizonHours: Int, turbineCount: Int, weatherIssuedAt: Instant) = listOf(
+        StepTemplate(
+            "Получение прогноза погоды", "fetchWeather",
+            "$WEATHER_SOURCE, прогон от $weatherIssuedAt (не позже момента прогноза), точек координат: $turbineCount",
+        ),
+        StepTemplate("Подготовка признаков", "prepareFeatures", "Ветер на высоте ступицы, плотность воздуха, календарные признаки"),
+        StepTemplate("Запуск модели прогнозирования", "predict", "Модель: $MODEL_VERSION, горизонт ${horizonHours}ч, квантили P10/P50/P90"),
+        StepTemplate("Анализ результата", "validate", "Диапазон [0,1] соблюдён, резких скачков нет"),
+        StepTemplate("Отчёт агента", null, "Сформирован текстовый отчёт и список предупреждений"),
     )
 
-    /** Плановый цикл в 00:00 UTC. Раз в неделю — ретрай получения погоды, чтобы фронт видел статус retrying. */
-    private fun scheduledLog(date: LocalDate, turbineId: String?): AgentLogResponse {
-        val start = date.atStartOfDay().toInstant(ZoneOffset.UTC)
+    /** Плановый цикл в момент ревизии. Раз в неделю — ретрай получения погоды, чтобы фронт видел статус retrying. */
+    private fun scheduledLog(date: LocalDate, turbineId: String?, revision: Int): AgentLogResponse {
+        val start = issuedAt(date, revision)
+        val weatherIssuedAt = start.minus(WEATHER_PUBLICATION_LAG)
         val turbineCount = if (turbineId != null) 1 else turbines.size
-        val templates = stepTemplates(48, turbineCount)
+        val templates = stepTemplates(48, turbineCount, weatherIssuedAt)
         val withRetry = date.dayOfMonth % 7 == 3
         val steps = mutableListOf<AgentStep>()
         var t = start.plusSeconds(5)
         if (withRetry) {
-            steps += AgentStep(templates[0].first, AgentStepStatus.retrying, t, "Timeout от Open-Meteo, повтор через 10с (попытка 1/3)")
+            steps += AgentStep(
+                templates[0].name, AgentStepStatus.retrying, t,
+                "Timeout от Open-Meteo, повтор через 10с (попытка 1/3)", templates[0].tool, null,
+            )
             t = t.plusSeconds(10)
         }
-        templates.forEachIndexed { i, (name, details) ->
+        templates.forEachIndexed { i, tpl ->
             if (i > 0) t = t.plusSeconds(if (i == 2) 5 else 2)
-            steps += AgentStep(name, AgentStepStatus.success, t, details)
+            steps += AgentStep(tpl.name, AgentStepStatus.success, t, tpl.details, tpl.tool, weatherIssuedAt.takeIf { i == 0 })
         }
-        return AgentLogResponse(date, "cycle_$start", steps)
+        return AgentLogResponse(date, "cycle_$start", revision, start, steps)
     }
 
     /** Ручной запуск: шаги «проходят» по одному каждые STEP_DURATION — удобно для поллинга с фронта. */
     private fun manualLog(run: ManualRun): AgentLogResponse {
+        val issuedAt = issuedAt(run.date, 1)
+        val weatherIssuedAt = issuedAt.minus(WEATHER_PUBLICATION_LAG)
         val elapsed = Duration.between(run.startedAt, clock.instant())
         val done = (elapsed.toMillis() / STEP_DURATION.toMillis()).toInt()
-        val steps = stepTemplates(run.horizonHours, 1).take(done + 1).mapIndexed { i, (name, details) ->
+        val steps = stepTemplates(run.horizonHours, 1, weatherIssuedAt).take(done + 1).mapIndexed { i, tpl ->
             val finished = i < done
             AgentStep(
-                stepName = name,
+                stepName = tpl.name,
                 status = if (finished) AgentStepStatus.success else AgentStepStatus.running,
                 timestamp = run.startedAt.plus(STEP_DURATION.multipliedBy(i.toLong())),
-                details = if (finished) details else null,
+                details = if (finished) tpl.details else null,
+                tool = tpl.tool,
+                dataIssuedAt = weatherIssuedAt.takeIf { finished && i == 0 },
             )
         }
-        return AgentLogResponse(run.date, run.cycleId, steps)
+        return AgentLogResponse(run.date, run.cycleId, 1, issuedAt, steps)
     }
 
     // --- синтетическая физика ---
@@ -208,8 +335,27 @@ class MockDataService(private val clock: Clock) {
     private fun r3(x: Double) = round(x * 1000) / 1000
 
     companion object {
-        /** Факт известен до конца backtest-периода (1–28 февраля 2026). */
+        /** Прогнозы выпускаются «как если бы» на 00:00 UTC каждого дня: первый — на 31.01, последний покрывает 28.02. */
+        val BACKTEST_FROM: LocalDate = LocalDate.parse("2026-01-31")
+        val BACKTEST_TO: LocalDate = LocalDate.parse("2026-02-27")
+
+        /** Факт известен до конца backtest-периода (по 28 февраля 2026 включительно). */
         val ACTUALS_UNTIL: Instant = Instant.parse("2026-03-01T00:00:00Z")
         val STEP_DURATION: Duration = Duration.ofSeconds(2)
+
+        /** Ревизии: плановая в 00:00 UTC и пересчёты при выходе новых прогонов погоды каждые 6 ч. */
+        const val REVISIONS_PER_DAY = 4
+        val REVISION_STEP: Duration = Duration.ofHours(6)
+
+        /** Прогон погоды публикуется с задержкой, поэтому в момент T доступен только прогон, стартовавший в T − 6 ч. */
+        val WEATHER_PUBLICATION_LAG: Duration = Duration.ofHours(6)
+
+        const val WEATHER_SOURCE = "open-meteo:ecmwf_ifs025"
+        const val MODEL_VERSION = "mock-v0"
+
+        private const val Z80 = 1.2816 // квантиль N(0,1) для интервала P10–P90
+        private const val LOW_POWER = 0.05
+        private const val RAMP = 0.3
+        private val HOUR: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneOffset.UTC)
     }
 }

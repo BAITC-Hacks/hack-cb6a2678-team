@@ -3,24 +3,63 @@ info:
   title: WES Forecast Agentic API
   description: >
     API для Agentic AI-системы прогнозирования почасовой выработки ВЭС.
-    Отдаёт координаты турбин, прогнозы, метрики качества и лог шагов агента.
-  version: 1.0.0
+    Отдаёт координаты турбин, прогнозы с интервалами неопределённости,
+    ревизии прогноза, метрики качества, лог шагов агента и чат с агентом.
+
+
+    **Время.** Все метки времени — UTC (ISO-8601 с `Z`).
+
+
+    **Backtest.** Прогнозы выпускаются «как если бы» на 00:00 UTC каждой даты
+    с 2026-01-31 по 2026-02-27 (горизонт 24–48 ч покрывает период по 2026-02-28).
+    Границы периода отдаёт `GET /api/meta`.
+
+
+    **Ревизии.** Ревизия 1 — плановый прогноз в 00:00 UTC (по ней считаются
+    метрики). Ревизии 2–4 — пересчёты в 06/12/18 UTC при выходе новых прогонов
+    погоды.
+
+
+    **Честность данных.** Каждый прогноз указывает `weatherIssuedAt` — время
+    выпуска использованного прогноза погоды. Оно всегда не позже
+    `forecastIssuedAt`: данные из будущего не используются.
+  version: 1.1.0
 
 servers:
   - url: http://localhost:8080
     description: Локальный сервер разработки
 
 tags:
+  - name: Meta
+    description: Параметры системы и backtest-периода
   - name: Turbines
     description: Координаты и метаданные турбин
   - name: Forecast
-    description: Почасовой прогноз выработки
+    description: Почасовой прогноз выработки и его ревизии
   - name: Metrics
     description: Метрики качества модели
   - name: AgentLog
     description: Лог шагов автономного агента
+  - name: Agent
+    description: LLM-агент (Spring AI + Ollama) с инструментами над данными ВЭС
 
 paths:
+
+  /api/meta:
+    get:
+      tags: [Meta]
+      summary: Параметры системы
+      description: >
+        Границы backtest-периода (для ограничения выбора даты на фронте),
+        доступные горизонты, число ревизий в день, версии модели и LLM.
+      operationId: getMeta
+      responses:
+        '200':
+          description: Параметры системы
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetaResponse'
 
   /api/turbines:
     get:
@@ -51,22 +90,17 @@ paths:
       tags: [Forecast]
       summary: Почасовой прогноз выработки для турбины на заданную дату
       description: >
-        Возвращает прогноз, сформированный "как если бы" на указанную дату
-        (forecastIssuedAt), на горизонт 24-48 часов вперёд. Используется как
-        для отображения актуального прогноза, так и для прокрутки
-        backtest-периода (1-28 февраля 2026).
+        Возвращает прогноз, сформированный «как если бы» в момент
+        `forecastIssuedAt` (00:00 UTC даты + 6 ч × (revision − 1)), на горизонт
+        24 или 48 часов. Кроме точек содержит готовую сводку, предупреждения и
+        текстовый отчёт агента.
       operationId: getForecast
       parameters:
-        - name: turbineId
-          in: query
-          required: true
-          schema:
-            type: string
-          example: "t1"
+        - $ref: '#/components/parameters/TurbineId'
         - name: date
           in: query
           required: true
-          description: Дата, на которую формируется прогноз (имитация "сегодня")
+          description: Дата, на которую формируется прогноз (имитация «сегодня»)
           schema:
             type: string
             format: date
@@ -79,6 +113,7 @@ paths:
             type: integer
             enum: [24, 48]
             default: 48
+        - $ref: '#/components/parameters/Revision'
       responses:
         '200':
           description: Прогноз на указанный период
@@ -89,32 +124,116 @@ paths:
               example:
                 turbineId: "t1"
                 forecastIssuedAt: "2026-02-01T00:00:00Z"
+                revision: 1
                 horizonHours: 48
+                weatherSource: "open-meteo:ecmwf_ifs025"
+                weatherIssuedAt: "2026-01-31T18:00:00Z"
+                modelVersion: "lgbm-v1"
+                summary:
+                  meanPower: 0.412
+                  minPower: 0.0
+                  maxPower: 0.91
+                  maxPowerAt: "2026-02-01T14:00:00Z"
+                  fullLoadHours: 19.8
+                  lowPowerHours: 6
+                alerts:
+                  - type: "icing"
+                    severity: "warning"
+                    from: "2026-02-01T02:00:00Z"
+                    to: "2026-02-01T06:00:00Z"
+                    message: "Риск обледенения лопастей: температура около 0 °C"
+                agentReport: "Средняя мощность 0.41, пик 0.91 в 14:00 UTC. Ночью риск обледенения."
                 points:
                   - timestamp: "2026-02-01T01:00:00Z"
                     predictedPower: 0.42
+                    p10: 0.30
+                    p90: 0.55
                     actualPower: 0.39
                     windSpeed: 7.2
                     temperature: -3.1
-                  - timestamp: "2026-02-01T02:00:00Z"
-                    predictedPower: 0.45
-                    actualPower: 0.41
-                    windSpeed: 7.8
-                    temperature: -3.4
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '404':
-          description: Прогноз на указанную дату/турбину не найден
+          $ref: '#/components/responses/NotFound'
+
+  /api/forecast/revisions:
+    get:
+      tags: [Forecast]
+      summary: Ревизии прогноза за дату
+      description: >
+        Как менялся прогноз при выходе новых прогонов погоды. Для переключателя
+        версий на фронте и демонстрации повторного расчёта.
+      operationId: getForecastRevisions
+      parameters:
+        - $ref: '#/components/parameters/TurbineId'
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          example: "2026-02-01"
+      responses:
+        '200':
+          description: Список ревизий
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ForecastRevisionsResponse'
+              example:
+                turbineId: "t1"
+                date: "2026-02-01"
+                revisions:
+                  - revision: 1
+                    forecastIssuedAt: "2026-02-01T00:00:00Z"
+                    weatherIssuedAt: "2026-01-31T18:00:00Z"
+                    meanPower: 0.412
+                    changeVsPreviousPct: null
+                  - revision: 2
+                    forecastIssuedAt: "2026-02-01T06:00:00Z"
+                    weatherIssuedAt: "2026-02-01T00:00:00Z"
+                    meanPower: 0.379
+                    changeVsPreviousPct: -8.0
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/forecast/run:
+    post:
+      tags: [Forecast]
+      summary: Запустить новый цикл прогноза вручную
+      description: >
+        Ручной триггер полного agentic-цикла (погода → признаки → модель →
+        анализ → отчёт) для демонстрации автономности системы вживую.
+        Прогресс — поллингом `GET /api/agent-log?date=…&turbineId=…`.
+      operationId: runForecastCycle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunForecastRequest'
+      responses:
+        '202':
+          description: Цикл запущен, обработка асинхронная
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RunForecastResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /api/metrics:
     get:
       tags: [Metrics]
       summary: Метрики качества модели за период
       description: >
-        Возвращает агрегированные метрики точности (MAE/RMSE/MAPE) и
-        разбивку по дням для тестового периода.
+        Метрики по плановой ревизии (1). `mae`, `rmse`, `mape`, бейзлайны,
+        `intervalCoverage` и `byDay` считаются по горизонту 1–24 ч;
+        `byLeadTime` — по каждому часу заблаговременности 1–48.
       operationId: getMetrics
       parameters:
         - name: turbineId
@@ -129,14 +248,14 @@ paths:
           schema:
             type: string
             format: date
-          example: "2026-02-01"
+          example: "2026-01-31"
         - name: to
           in: query
           required: true
           schema:
             type: string
             format: date
-          example: "2026-02-28"
+          example: "2026-02-27"
       responses:
         '200':
           description: Метрики за период
@@ -144,30 +263,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MetricsResponse'
-              example:
-                turbineId: "t1"
-                periodFrom: "2026-02-01"
-                periodTo: "2026-02-28"
-                mae: 0.031
-                rmse: 0.045
-                mape: 8.2
-                baselineMae: 0.067
-                byDay:
-                  - date: "2026-02-01"
-                    mae: 0.028
-                    rmse: 0.039
-                  - date: "2026-02-02"
-                    mae: 0.033
-                    rmse: 0.047
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /api/agent-log:
     get:
       tags: [AgentLog]
       summary: Лог шагов агента для конкретного цикла прогноза
       description: >
-        Показывает последовательность действий Agentic AI-системы
-        (получение погоды, подготовка данных, запуск модели, валидация)
-        для прогноза, сформированного на указанную дату.
+        Последовательность действий агента (получение погоды, подготовка
+        признаков, запуск модели, анализ, отчёт). Для шага получения погоды
+        `dataIssuedAt` показывает время выпуска прогноза погоды — фронт может
+        показать отметку «✓ не позже момента прогноза».
       operationId: getAgentLog
       parameters:
         - name: date
@@ -183,6 +292,7 @@ paths:
           required: false
           schema:
             type: string
+        - $ref: '#/components/parameters/Revision'
       responses:
         '200':
           description: Лог шагов агента
@@ -193,68 +303,136 @@ paths:
               example:
                 date: "2026-02-01"
                 cycleId: "cycle_2026-02-01T00:00:00Z"
+                revision: 1
+                forecastIssuedAt: "2026-02-01T00:00:00Z"
                 steps:
-                  - stepName: "Получение погодных данных"
+                  - stepName: "Получение прогноза погоды"
                     status: "success"
                     timestamp: "2026-02-01T00:00:05Z"
-                    details: "Источник: Open-Meteo archive, 2 точки координат"
-                  - stepName: "Подготовка данных"
-                    status: "success"
-                    timestamp: "2026-02-01T00:00:07Z"
-                    details: "Нормализация, агрегация по часам"
+                    details: "open-meteo:ecmwf_ifs025, прогон от 2026-01-31T18:00:00Z"
+                    tool: "fetchWeather"
+                    dataIssuedAt: "2026-01-31T18:00:00Z"
                   - stepName: "Запуск модели прогнозирования"
                     status: "success"
                     timestamp: "2026-02-01T00:00:12Z"
-                    details: "Модель: LightGBM v3, горизонт 48ч"
-                  - stepName: "Анализ результата"
-                    status: "success"
-                    timestamp: "2026-02-01T00:00:13Z"
-                    details: "Аномалий не обнаружено"
+                    details: "Модель: lgbm-v1, горизонт 48ч, квантили P10/P50/P90"
+                    tool: "predict"
+                    dataIssuedAt: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
-  /api/forecast/run:
+  /api/agent/chat:
     post:
-      tags: [Forecast]
-      summary: Запустить новый цикл прогноза вручную
+      tags: [Agent]
+      summary: Задать вопрос LLM-агенту
       description: >
-        Ручной триггер полного agentic-цикла (получение погоды → модель →
-        валидация) для демонстрации автономности системы вживую.
-      operationId: runForecastCycle
+        Агент сам решает, какие инструменты вызвать (турбины, прогноз, ревизии,
+        метрики), и отвечает на естественном языке. В `toolCalls` — журнал
+        вызванных инструментов. Локальная LLM может отвечать до нескольких минут.
+      operationId: agentChat
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [turbineId, date]
-              properties:
-                turbineId:
-                  type: string
-                  example: "t1"
-                date:
-                  type: string
-                  format: date
-                  example: "2026-02-01"
-                horizonHours:
-                  type: integer
-                  enum: [24, 48]
-                  default: 48
+              $ref: '#/components/schemas/AgentChatRequest'
+            example:
+              message: "Какая ожидается выработка турбины t1 на 5 февраля 2026? Есть ли риск простоя?"
       responses:
-        '202':
-          description: Цикл запущен, обработка асинхронная
+        '200':
+          description: Ответ агента
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  cycleId:
-                    type: string
-                    example: "cycle_2026-02-01T12:34:00Z"
-                  status:
-                    type: string
-                    example: "processing"
+                $ref: '#/components/schemas/AgentChatResponse'
+              example:
+                answer: "5 февраля средняя мощность t1 — 0.11, пик 0.46. Ночью риск обледенения."
+                model: "qwen3:8b"
+                toolCalls:
+                  - tool: "getForecast"
+                    args: { turbineId: "t1", date: "2026-02-05", horizonHours: 24, revision: 1 }
+                    ok: true
+                    error: null
+                durationMs: 14403
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '503':
+          description: LLM недоступна (Ollama не запущена)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
 components:
+
+  parameters:
+    TurbineId:
+      name: turbineId
+      in: query
+      required: true
+      schema:
+        type: string
+      example: "t1"
+    Revision:
+      name: revision
+      in: query
+      required: false
+      description: Ревизия прогноза 1..4 (1 — плановая в 00:00 UTC)
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 4
+        default: 1
+
+  responses:
+    BadRequest:
+      description: Некорректные параметры
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Турбина не найдена
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
   schemas:
+
+    MetaResponse:
+      type: object
+      required: [backtestFrom, backtestTo, horizons, revisionsPerDay, timezone, modelVersion, llmModel]
+      properties:
+        backtestFrom:
+          type: string
+          format: date
+          description: Первая дата выпуска прогноза
+          example: "2026-01-31"
+        backtestTo:
+          type: string
+          format: date
+          description: Последняя дата выпуска прогноза
+          example: "2026-02-27"
+        horizons:
+          type: array
+          items:
+            type: integer
+          example: [24, 48]
+        revisionsPerDay:
+          type: integer
+          example: 4
+        timezone:
+          type: string
+          example: "UTC"
+        modelVersion:
+          type: string
+          example: "lgbm-v1"
+        llmModel:
+          type: string
+          example: "qwen3:8b"
 
     Turbine:
       type: object
@@ -277,17 +455,30 @@ components:
 
     ForecastPoint:
       type: object
-      required: [timestamp, predictedPower]
+      required: [timestamp, predictedPower, windSpeed, temperature]
       properties:
         timestamp:
           type: string
           format: date-time
+          description: Конец часового интервала, UTC
           example: "2026-02-01T01:00:00Z"
         predictedPower:
           type: number
           format: double
-          description: Нормализованная активная мощность (0-1)
+          description: Медианный прогноз (P50) нормализованной мощности 0..1
           example: 0.42
+        p10:
+          type: number
+          format: double
+          nullable: true
+          description: Нижняя граница интервала (10-й перцентиль)
+          example: 0.30
+        p90:
+          type: number
+          format: double
+          nullable: true
+          description: Верхняя граница интервала (90-й перцентиль)
+          example: 0.55
         actualPower:
           type: number
           format: double
@@ -297,17 +488,74 @@ components:
         windSpeed:
           type: number
           format: double
-          description: Скорость ветра, м/с
+          description: Прогнозная скорость ветра на высоте ступицы, м/с
           example: 7.2
         temperature:
           type: number
           format: double
-          description: Температура окружающей среды, °C
+          description: Прогнозная температура, °C
           example: -3.1
+
+    ForecastSummary:
+      type: object
+      description: Готовые итоги по точкам прогноза (P50)
+      required: [meanPower, minPower, maxPower, maxPowerAt, fullLoadHours, lowPowerHours]
+      properties:
+        meanPower:
+          type: number
+          format: double
+          example: 0.412
+        minPower:
+          type: number
+          format: double
+          example: 0.0
+        maxPower:
+          type: number
+          format: double
+          example: 0.91
+        maxPowerAt:
+          type: string
+          format: date-time
+          example: "2026-02-01T14:00:00Z"
+        fullLoadHours:
+          type: number
+          format: double
+          description: >
+            Сумма нормализованной мощности по часам = эквивалент часов работы на
+            номинале. Умножить на установленную мощность — получится МВт·ч.
+          example: 19.8
+        lowPowerHours:
+          type: integer
+          description: Число часов с мощностью ниже 0.05
+          example: 6
+
+    ForecastAlert:
+      type: object
+      required: [type, severity, from, to, message]
+      properties:
+        type:
+          type: string
+          enum: [icing, storm_cutout, ramp_down, ramp_up, low_confidence]
+          description: >
+            icing — риск обледенения; storm_cutout — ветер у порога штормового
+            отключения; ramp_down/ramp_up — резкое изменение выработки;
+            low_confidence — широкий интервал P10–P90
+        severity:
+          type: string
+          enum: [info, warning, critical]
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+          description: Последний час интервала включительно
+        message:
+          type: string
 
     ForecastResponse:
       type: object
-      required: [turbineId, forecastIssuedAt, horizonHours, points]
+      required: [turbineId, forecastIssuedAt, revision, horizonHours, weatherSource, weatherIssuedAt, modelVersion, summary, alerts, points]
       properties:
         turbineId:
           type: string
@@ -315,15 +563,104 @@ components:
         forecastIssuedAt:
           type: string
           format: date-time
-          description: Момент времени, "как если бы сегодня" формировался прогноз
+          description: Момент, «как если бы сегодня» формировался прогноз
           example: "2026-02-01T00:00:00Z"
+        revision:
+          type: integer
+          example: 1
         horizonHours:
           type: integer
           example: 48
+        weatherSource:
+          type: string
+          description: Источник и модель прогноза погоды
+          example: "open-meteo:ecmwf_ifs025"
+        weatherIssuedAt:
+          type: string
+          format: date-time
+          description: Время выпуска использованного прогноза погоды (≤ forecastIssuedAt)
+          example: "2026-01-31T18:00:00Z"
+        modelVersion:
+          type: string
+          example: "lgbm-v1"
+        summary:
+          $ref: '#/components/schemas/ForecastSummary'
+        alerts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ForecastAlert'
+        agentReport:
+          type: string
+          nullable: true
+          description: Текстовый отчёт агента для диспетчера
         points:
           type: array
           items:
             $ref: '#/components/schemas/ForecastPoint'
+
+    ForecastRevision:
+      type: object
+      required: [revision, forecastIssuedAt, weatherIssuedAt, meanPower]
+      properties:
+        revision:
+          type: integer
+          example: 2
+        forecastIssuedAt:
+          type: string
+          format: date-time
+        weatherIssuedAt:
+          type: string
+          format: date-time
+        meanPower:
+          type: number
+          format: double
+          description: Средняя мощность по горизонту 48 ч
+        changeVsPreviousPct:
+          type: number
+          format: double
+          nullable: true
+          description: Изменение средней мощности относительно предыдущей ревизии, %
+
+    ForecastRevisionsResponse:
+      type: object
+      required: [turbineId, date, revisions]
+      properties:
+        turbineId:
+          type: string
+        date:
+          type: string
+          format: date
+        revisions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ForecastRevision'
+
+    RunForecastRequest:
+      type: object
+      required: [turbineId, date]
+      properties:
+        turbineId:
+          type: string
+          example: "t1"
+        date:
+          type: string
+          format: date
+          example: "2026-02-01"
+        horizonHours:
+          type: integer
+          enum: [24, 48]
+          default: 48
+
+    RunForecastResponse:
+      type: object
+      required: [cycleId, status]
+      properties:
+        cycleId:
+          type: string
+          example: "cycle_2026-02-01T12:34:00Z"
+        status:
+          type: string
+          example: "processing"
 
     DailyMetric:
       type: object
@@ -342,9 +679,22 @@ components:
           format: double
           example: 0.039
 
+    LeadTimeMetric:
+      type: object
+      required: [leadHour, mae]
+      properties:
+        leadHour:
+          type: integer
+          description: Заблаговременность, часов после выпуска прогноза
+          example: 36
+        mae:
+          type: number
+          format: double
+          example: 0.041
+
     MetricsResponse:
       type: object
-      required: [periodFrom, periodTo, mae, rmse, mape]
+      required: [periodFrom, periodTo, mae, rmse, mape, baselineMae, byDay, byLeadTime]
       properties:
         turbineId:
           type: string
@@ -353,11 +703,11 @@ components:
         periodFrom:
           type: string
           format: date
-          example: "2026-02-01"
+          example: "2026-01-31"
         periodTo:
           type: string
           format: date
-          example: "2026-02-28"
+          example: "2026-02-27"
         mae:
           type: number
           format: double
@@ -371,17 +721,33 @@ components:
         mape:
           type: number
           format: double
-          description: Mean Absolute Percentage Error, %
+          description: Mean Absolute Percentage Error по часам с фактом > 0.1, %
           example: 8.2
         baselineMae:
           type: number
           format: double
-          description: MAE наивного бейзлайна для сравнения
+          description: MAE бейзлайна persistence («мощность как в момент прогноза»)
           example: 0.067
+        powerCurveBaselineMae:
+          type: number
+          format: double
+          nullable: true
+          description: MAE бейзлайна «кривая мощности по сырому прогнозу ветра» без ML
+          example: 0.052
+        intervalCoverage:
+          type: number
+          format: double
+          nullable: true
+          description: Доля часов, где факт попал в [P10, P90]; в идеале около 0.8
+          example: 0.79
         byDay:
           type: array
           items:
             $ref: '#/components/schemas/DailyMetric'
+        byLeadTime:
+          type: array
+          items:
+            $ref: '#/components/schemas/LeadTimeMetric'
 
     AgentStep:
       type: object
@@ -389,7 +755,7 @@ components:
       properties:
         stepName:
           type: string
-          example: "Получение погодных данных"
+          example: "Получение прогноза погоды"
         status:
           type: string
           enum: [success, failed, retrying, running]
@@ -401,11 +767,21 @@ components:
         details:
           type: string
           nullable: true
-          example: "Источник: Open-Meteo archive, 2 точки координат"
+        tool:
+          type: string
+          nullable: true
+          description: Инструмент агента, выполнивший шаг
+          example: "fetchWeather"
+        dataIssuedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Время выпуска использованных внешних данных (для проверки на утечку)
+          example: "2026-01-31T18:00:00Z"
 
     AgentLogResponse:
       type: object
-      required: [date, cycleId, steps]
+      required: [date, cycleId, revision, forecastIssuedAt, steps]
       properties:
         date:
           type: string
@@ -414,10 +790,58 @@ components:
         cycleId:
           type: string
           example: "cycle_2026-02-01T00:00:00Z"
+        revision:
+          type: integer
+          example: 1
+        forecastIssuedAt:
+          type: string
+          format: date-time
+          example: "2026-02-01T00:00:00Z"
         steps:
           type: array
           items:
             $ref: '#/components/schemas/AgentStep'
+
+    AgentChatRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          example: "Сравни точность модели с бейзлайном за февраль 2026"
+
+    AgentToolCall:
+      type: object
+      required: [tool, args, ok]
+      properties:
+        tool:
+          type: string
+          example: "getMetrics"
+        args:
+          type: object
+          additionalProperties: true
+        ok:
+          type: boolean
+        error:
+          type: string
+          nullable: true
+
+    AgentChatResponse:
+      type: object
+      required: [answer, model, toolCalls, durationMs]
+      properties:
+        answer:
+          type: string
+        model:
+          type: string
+          example: "qwen3:8b"
+        toolCalls:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgentToolCall'
+        durationMs:
+          type: integer
+          format: int64
 
     ErrorResponse:
       type: object
@@ -425,4 +849,4 @@ components:
       properties:
         message:
           type: string
-          example: "Forecast not found for turbineId=t1, date=2026-02-01"
+          example: "Turbine not found: turbineId=nope"

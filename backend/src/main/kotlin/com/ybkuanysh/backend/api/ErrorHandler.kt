@@ -8,6 +8,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.web.client.ResourceAccessException
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
 
 class BadRequestException(message: String) : RuntimeException(message)
@@ -36,5 +37,10 @@ class ErrorHandler {
     @ExceptionHandler(HttpMessageNotReadableException::class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     fun unreadableBody(e: HttpMessageNotReadableException) =
-        ErrorResponse("Invalid request body: turbineId and date (yyyy-MM-dd) are required")
+        ErrorResponse("Invalid request body: check required fields and formats (dates as yyyy-MM-dd)")
+
+    @ExceptionHandler(ResourceAccessException::class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    fun llmUnavailable(e: ResourceAccessException) =
+        ErrorResponse("LLM is unavailable (is Ollama running?): ${e.message}")
 }

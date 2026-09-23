@@ -2,11 +2,14 @@ package com.ybkuanysh.backend.api
 
 import com.ybkuanysh.backend.dto.AgentLogResponse
 import com.ybkuanysh.backend.dto.ForecastResponse
+import com.ybkuanysh.backend.dto.ForecastRevisionsResponse
+import com.ybkuanysh.backend.dto.MetaResponse
 import com.ybkuanysh.backend.dto.MetricsResponse
 import com.ybkuanysh.backend.dto.RunForecastRequest
 import com.ybkuanysh.backend.dto.RunForecastResponse
 import com.ybkuanysh.backend.dto.Turbine
 import com.ybkuanysh.backend.mock.MockDataService
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.GetMapping
@@ -21,7 +24,21 @@ import java.time.temporal.ChronoUnit
 
 @RestController
 @RequestMapping("/api")
-class WesController(private val mock: MockDataService) {
+class WesController(
+    private val mock: MockDataService,
+    @Value("\${spring.ai.ollama.chat.model}") private val llmModel: String,
+) {
+
+    @GetMapping("/meta")
+    fun getMeta() = MetaResponse(
+        backtestFrom = MockDataService.BACKTEST_FROM,
+        backtestTo = MockDataService.BACKTEST_TO,
+        horizons = listOf(24, 48),
+        revisionsPerDay = MockDataService.REVISIONS_PER_DAY,
+        timezone = "UTC",
+        modelVersion = MockDataService.MODEL_VERSION,
+        llmModel = llmModel,
+    )
 
     @GetMapping("/turbines")
     fun getTurbines(): List<Turbine> = mock.turbines
@@ -31,7 +48,14 @@ class WesController(private val mock: MockDataService) {
         @RequestParam turbineId: String,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) date: LocalDate,
         @RequestParam(defaultValue = "48") horizonHours: Int,
-    ): ForecastResponse = mock.forecast(turbineId, date, validHorizon(horizonHours))
+        @RequestParam(defaultValue = "1") revision: Int,
+    ): ForecastResponse = mock.forecast(turbineId, date, validHorizon(horizonHours), validRevision(revision))
+
+    @GetMapping("/forecast/revisions")
+    fun getForecastRevisions(
+        @RequestParam turbineId: String,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) date: LocalDate,
+    ): ForecastRevisionsResponse = mock.revisions(turbineId, date)
 
     @GetMapping("/metrics")
     fun getMetrics(
@@ -50,7 +74,8 @@ class WesController(private val mock: MockDataService) {
     fun getAgentLog(
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) date: LocalDate,
         @RequestParam(required = false) turbineId: String?,
-    ): AgentLogResponse = mock.agentLog(date, turbineId)
+        @RequestParam(defaultValue = "1") revision: Int,
+    ): AgentLogResponse = mock.agentLog(date, turbineId, validRevision(revision))
 
     @PostMapping("/forecast/run")
     @ResponseStatus(HttpStatus.ACCEPTED)
@@ -59,6 +84,10 @@ class WesController(private val mock: MockDataService) {
 
     private fun validHorizon(h: Int): Int =
         if (h == 24 || h == 48) h else throw BadRequestException("horizonHours must be 24 or 48, got $h")
+
+    private fun validRevision(r: Int): Int =
+        if (r in 1..MockDataService.REVISIONS_PER_DAY) r
+        else throw BadRequestException("revision must be in 1..${MockDataService.REVISIONS_PER_DAY}, got $r")
 
     companion object {
         const val MAX_METRICS_DAYS = 366

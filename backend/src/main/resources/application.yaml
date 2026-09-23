@@ -1,6 +1,28 @@
 spring:
   application:
     name: backend
+  ai:
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      chat:
+        model: ${OLLAMA_MODEL:qwen3:8b}
+        temperature: 0.2
+        # Режим "размышлений" qwen3 сильно замедляет ответы на CPU, агенту он не нужен
+        think: false
+        # По умолчанию Ollama даёт ~2k токенов контекста и молча обрезает промпт — ответы инструментов не влезают
+        num-ctx: 16384
+      init:
+        # Модель скачивает сервис ollama-pull из docker-compose; бэкенд стартует без ожидания
+        pull-model-strategy: ${OLLAMA_PULL_STRATEGY:never}
+    # По умолчанию 10 попыток с растущей паузой — без Ollama запрос висел бы минутами
+    retry:
+      max-attempts: 2
+      backoff:
+        initial-interval: 1s
+  http:
+    clients:
+      # Локальная LLM на CPU может отвечать минутами
+      read-timeout: 5m
 
 server:
   port: 8080
