@@ -8,6 +8,8 @@ import org.springframework.web.bind.MissingServletRequestParameterException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.ai.retry.NonTransientAiException
+import org.springframework.ai.retry.TransientAiException
 import org.springframework.web.client.ResourceAccessException
 import com.ybkuanysh.backend.weather.WeatherUnavailableException
 import com.ybkuanysh.backend.ml.MlUnavailableException
@@ -53,4 +55,9 @@ class ErrorHandler {
     @ExceptionHandler(MlUnavailableException::class)
     @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
     fun mlUnavailable(e: MlUnavailableException) = ErrorResponse(e.message ?: "ML service unavailable")
+
+    // LLM ответила ошибкой (например, процесс модели убит из-за нехватки памяти) — это недоступность, а не баг API
+    @ExceptionHandler(TransientAiException::class, NonTransientAiException::class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    fun llmFailed(e: RuntimeException) = ErrorResponse("LLM is unavailable: ${e.message}")
 }
