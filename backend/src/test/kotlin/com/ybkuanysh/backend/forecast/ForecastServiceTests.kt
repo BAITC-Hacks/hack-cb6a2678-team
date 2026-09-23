@@ -5,7 +5,7 @@ import com.ybkuanysh.backend.dto.AlertType
 import com.ybkuanysh.backend.ml.MlForecastResponse
 import com.ybkuanysh.backend.ml.MlProperties
 import com.ybkuanysh.backend.ml.MlUnavailableException
-import com.ybkuanysh.backend.mock.MockDataService
+import com.ybkuanysh.backend.turbine.TurbineRegistry
 import com.ybkuanysh.backend.support.FixtureMl
 import com.ybkuanysh.backend.weather.LeakageException
 import com.ybkuanysh.backend.weather.WeatherProperties
@@ -42,7 +42,7 @@ class ForecastServiceTests {
 
     private fun service(ml: FixtureMl = FixtureMl(), offlineWeather: Boolean = false): ForecastService {
         val weather = WeatherService(weatherSource, WeatherProperties(cacheDir = cacheDir.toString(), offline = offlineWeather), mapper)
-        return ForecastService(ml, MlProperties(), weather, MockDataService(Clock.systemUTC(), weather))
+        return ForecastService(ml, MlProperties(), weather, TurbineRegistry())
     }
 
     private val jan31: LocalDate = LocalDate.parse("2026-01-31")

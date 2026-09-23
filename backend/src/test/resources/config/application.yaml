@@ -7,3 +7,8 @@ ml:
   # Фикстуры отложенного теста и SCADA: 01–03.01.2026 (SCADA с 30.12.2025 — для бейзлайна persistence)
   evaluation-dir: src/test/resources/evaluation
   scada-dir: src/test/resources/scada
+cycle:
+  store-dir: ""
+  llm-report: false
+  async: false
+  retry-delay: 0s

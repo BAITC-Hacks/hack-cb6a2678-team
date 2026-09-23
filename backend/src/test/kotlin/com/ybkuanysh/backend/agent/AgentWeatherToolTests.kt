@@ -6,7 +6,7 @@ import com.ybkuanysh.backend.metrics.EvaluationRepository
 import com.ybkuanysh.backend.metrics.MetricsService
 import com.ybkuanysh.backend.metrics.ScadaRepository
 import com.ybkuanysh.backend.ml.MlProperties
-import com.ybkuanysh.backend.mock.MockDataService
+import com.ybkuanysh.backend.turbine.TurbineRegistry
 import com.ybkuanysh.backend.support.FixtureMl
 import com.ybkuanysh.backend.weather.WeatherHour
 import com.ybkuanysh.backend.weather.WeatherProperties
@@ -48,7 +48,7 @@ class AgentWeatherToolTests {
     private fun tools(): AgentTools {
         val mapper = JsonMapper.builder().build()
         val weather = WeatherService(source, WeatherProperties(cacheDir = cacheDir.toString()), mapper)
-        val mock = MockDataService(Clock.systemUTC(), weather)
+        val mock = TurbineRegistry()
         // localTz = UTC: дни и часы в проверках ниже — в UTC
         val ml = MlProperties(localTz = "Z")
         val metrics = MetricsService(EvaluationRepository(FixtureMl(), ml), ScadaRepository(ml), ml, mock)

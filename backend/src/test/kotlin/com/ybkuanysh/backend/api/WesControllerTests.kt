@@ -108,46 +108,62 @@ class WesControllerTests(@Autowired val mvc: MockMvc) {
     }
 
     @Test
-    fun `agent log for scheduled cycle`() {
-        mvc.get("/api/agent-log?date=2026-02-01").andExpect {
-            status { isOk() }
-            jsonPath("$.cycleId") { value("cycle_2026-02-01T00:00:00Z") }
-            jsonPath("$.revision") { value(1) }
-            jsonPath("$.status") { value("completed") }
-            jsonPath("$.reportSource") { value("mock") }
-            jsonPath("$.steps.length()") { value(5) }
-            jsonPath("$.steps[0].status") { value("success") }
-            jsonPath("$.steps[0].tool") { value("fetchWeather") }
-            jsonPath("$.steps[0].dataIssuedAt") { value("2026-01-31T12:00:00Z") }
-        }
-        mvc.get("/api/agent-log?date=2026-02-01&revision=3").andExpect {
-            jsonPath("$.forecastIssuedAt") { value("2026-02-01T12:00:00Z") }
-        }
-        mvc.get("/api/agent-log?date=2026-02-03").andExpect {
-            jsonPath("$.steps[0].status") { value("retrying") }
-        }
-    }
+    fun `agent cycle runs through all steps and shows up in agent log`() {
+        // До запуска цикла журнала нет
+        mvc.get("/api/agent-log?date=2026-02-04&turbineId=t2").andExpect { status { isNotFound() } }
 
-    @Test
-    fun `manual run is accepted and shows up in agent log`() {
         mvc.post("/api/forecast/run") {
             contentType = MediaType.APPLICATION_JSON
-            content = """{"turbineId":"t2","date":"2026-02-15"}"""
+            content = """{"turbineId":"t2","date":"2026-02-04"}"""
         }.andExpect {
             status { isAccepted() }
             jsonPath("$.status") { value("processing") }
             jsonPath("$.cycleId") { isString() }
         }
-        mvc.get("/api/agent-log?date=2026-02-15&turbineId=t2").andExpect {
+        // В тестах цикл синхронный (cycle.async=false), LLM выключена, погода офлайн
+        mvc.get("/api/agent-log?date=2026-02-04&turbineId=t2").andExpect {
             status { isOk() }
-            jsonPath("$.status") { value("processing") }
-            jsonPath("$.reportSource") { doesNotExist() }
-            jsonPath("$.steps[0].status") { value("running") }
+            jsonPath("$.status") { value("success") }
+            jsonPath("$.turbineId") { value("t2") }
+            jsonPath("$.forecastIssuedAt") { value("2026-02-04T07:00:00Z") }
+            jsonPath("$.reportSource") { value("template") }
+            jsonPath("$.steps.length()") { value(6) }
+            jsonPath("$.steps[0].tool") { value("fetchWeather") }
+            jsonPath("$.steps[0].status") { value("failed") }
+            jsonPath("$.steps[1].tool") { value("predict") }
+            jsonPath("$.steps[1].dataIssuedAt") { value("2026-02-03T18:00:00Z") }
+            jsonPath("$.steps[2].status") { value("success") }
+            jsonPath("$.steps[3].details") { value(org.hamcrest.Matchers.containsString("было")) }
+            jsonPath("$.steps[5].tool") { value("saveForecast") }
+        }
+        // Отчёт цикла попадает в прогноз
+        mvc.get("/api/forecast?turbineId=t2&date=2026-02-04").andExpect {
+            jsonPath("$.agentReport") { value(org.hamcrest.Matchers.startsWith("За 05.02.2026")) }
+        }
+    }
+
+    @Test
+    fun `agent cycle without ML fails after retries`() {
+        mvc.post("/api/forecast/run") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"turbineId":"t1","date":"2026-03-10"}"""
+        }.andExpect { status { isAccepted() } }
+        mvc.get("/api/agent-log?date=2026-03-10&turbineId=t1").andExpect {
+            status { isOk() }
+            jsonPath("$.status") { value("failed") }
+            jsonPath("$.steps[1].status") { value("retrying") }
+            jsonPath("$.steps[2].status") { value("retrying") }
+            jsonPath("$.steps[3].status") { value("failed") }
+            jsonPath("$.steps.length()") { value(4) }
         }
         mvc.post("/api/forecast/run") {
             contentType = MediaType.APPLICATION_JSON
             content = """{"turbineId":"t1"}"""
         }.andExpect { status { isBadRequest() } }
+        mvc.post("/api/forecast/run") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"turbineId":"nope","date":"2026-02-04"}"""
+        }.andExpect { status { isNotFound() } }
     }
 
     @Test
@@ -198,7 +214,6 @@ class WesControllerTests(@Autowired val mvc: MockMvc) {
             jsonPath("$.revisions[0].changeVsPreviousPct") { doesNotExist() }
             jsonPath("$.revisions[1].changeVsPreviousPct") { isNumber() }
         }
-        mvc.get("/api/agent-log?date=2026-02-05&revision=0").andExpect { status { isBadRequest() } }
     }
 
     @Test

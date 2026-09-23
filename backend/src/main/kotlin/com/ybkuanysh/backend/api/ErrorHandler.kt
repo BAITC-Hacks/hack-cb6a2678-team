@@ -1,7 +1,7 @@
 package com.ybkuanysh.backend.api
 
 import com.ybkuanysh.backend.dto.ErrorResponse
-import com.ybkuanysh.backend.mock.NotFoundException
+import com.ybkuanysh.backend.turbine.NotFoundException
 import org.springframework.http.HttpStatus
 import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.bind.MissingServletRequestParameterException

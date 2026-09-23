@@ -1,7 +1,7 @@
 # Фронтенд
 
 React. `/api/forecast` и `/api/forecast/revisions` уже отдают реальный прогноз ML (нужен запущенный ML-сервис,
-см. `AGENTS.md`); `/api/metrics` — реальная точность на январском тесте; `/api/agent-log`, `/api/forecast/run` пока на моках — формат не изменится.
+см. `AGENTS.md`); `/api/metrics` — реальная точность на январском тесте; `/api/agent-log` и `/api/forecast/run` — настоящий цикл агента.
 
 - API: `http://localhost:8080/api/**`, CORS открыт.
 - Контракт и примеры: `backend/src/main/resources/static/openapi.yaml`, Swagger UI — http://localhost:8080/swagger-ui.html.
@@ -40,14 +40,16 @@ React. `/api/forecast` и `/api/forecast/revisions` уже отдают реал
 
 | Что | Откуда |
 |---|---|
-| Лента шагов | `GET /api/agent-log?date&turbineId&revision` → `steps[]` |
+| Лента шагов | `GET /api/agent-log?date&turbineId` → `steps[]`; 404 — цикл для этого дня ещё не запускался |
+| Статус цикла | `status`: `running` / `success` / `failed`; `reportSource`: `llm` или `template` |
 | Статус шага | `status`: `success` ✓, `running` (спиннер), `retrying` (жёлтый), `failed` (красный) |
-| Инструмент | `tool` (может быть `null`) |
-| Отметка «✓ данные не из будущего» | у шага с `dataIssuedAt`: сравнить с `forecastIssuedAt` ответа |
+| Инструмент | `tool`: fetchWeather, predict, validate, compareWithPrevious, llm, saveForecast |
+| Отметка «✓ данные не из будущего» | у шагов fetchWeather и predict есть `dataIssuedAt`: оно ≤ `forecastIssuedAt` |
 | Кнопка «Пересчитать» | `POST /api/forecast/run` `{turbineId, date, horizonHours}` → 202 |
 
-После «Пересчитать» — поллинг `GET /api/agent-log?date&turbineId` раз в 1–2 с, пока все шаги не станут `success`
-(в моках шаги завершаются по одному каждые 2 с).
+После «Пересчитать» — поллинг `GET /api/agent-log?date&turbineId` раз в 1–2 с, пока `status` = `running`.
+Цикл идёт 5–15 с (дольше всего — отчёт LLM). Шаги появляются по мере выполнения; неудачная попытка ML —
+отдельный шаг `retrying`. После цикла отчёт появляется в `agentReport` у `/api/forecast`.
 
 ### 3. Качество модели
 

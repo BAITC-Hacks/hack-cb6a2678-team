@@ -8,10 +8,13 @@ import com.ybkuanysh.backend.dto.MetricsResponse
 import com.ybkuanysh.backend.dto.RunForecastRequest
 import com.ybkuanysh.backend.dto.RunForecastResponse
 import com.ybkuanysh.backend.dto.Turbine
+import com.ybkuanysh.backend.cycle.CycleStore
+import com.ybkuanysh.backend.cycle.ForecastCycleService
 import com.ybkuanysh.backend.forecast.ForecastService
+import com.ybkuanysh.backend.turbine.NotFoundException
 import com.ybkuanysh.backend.metrics.MetricsService
 import com.ybkuanysh.backend.ml.MlProperties
-import com.ybkuanysh.backend.mock.MockDataService
+import com.ybkuanysh.backend.turbine.TurbineRegistry
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.HttpStatus
@@ -28,9 +31,11 @@ import java.time.temporal.ChronoUnit
 @RestController
 @RequestMapping("/api")
 class WesController(
-    private val mock: MockDataService,
+    private val turbines: TurbineRegistry,
     private val forecasts: ForecastService,
     private val metricsService: MetricsService,
+    private val cycles: CycleStore,
+    private val cycleService: ForecastCycleService,
     private val ml: MlProperties,
     @Value("\${spring.ai.ollama.chat.model}") private val llmModel: String,
 ) {
@@ -54,14 +59,19 @@ class WesController(
     }
 
     @GetMapping("/turbines")
-    fun getTurbines(): List<Turbine> = mock.turbines
+    fun getTurbines(): List<Turbine> = turbines.turbines
 
     @GetMapping("/forecast")
     fun getForecast(
         @RequestParam turbineId: String,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) date: LocalDate,
         @RequestParam(defaultValue = "48") horizonHours: Int,
-    ): ForecastResponse = forecasts.forecast(turbineId, date, validHorizon(horizonHours))
+    ): ForecastResponse {
+        val fc = forecasts.forecast(turbineId, date, validHorizon(horizonHours))
+        // Если цикл агента для этого выпуска уже прошёл — отчёт из него (его пишет LLM)
+        val report = cycles.find(turbineId, date)?.forecast?.agentReport
+        return if (report != null) fc.copy(agentReport = report) else fc
+    }
 
     @GetMapping("/forecast/revisions")
     fun getForecastRevisions(
@@ -90,20 +100,29 @@ class WesController(
     fun getAgentLog(
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) date: LocalDate,
         @RequestParam(required = false) turbineId: String?,
-        @RequestParam(defaultValue = "1") revision: Int,
-    ): AgentLogResponse = mock.agentLog(date, turbineId, validRevision(revision))
+    ): AgentLogResponse {
+        val id = turbines.requireTurbine(turbineId ?: turbines.turbines.first().id).id
+        val record = cycles.find(id, date)
+            ?: throw NotFoundException("Цикл агента для $id на $date ещё не запускался — POST /api/forecast/run")
+        return AgentLogResponse(
+            date = record.issueDate,
+            cycleId = record.cycleId,
+            revision = 1,
+            forecastIssuedAt = forecasts.issuedAt(record.issueDate),
+            steps = record.steps,
+            turbineId = record.turbineId,
+            status = record.status,
+            reportSource = record.reportSource,
+        )
+    }
 
     @PostMapping("/forecast/run")
     @ResponseStatus(HttpStatus.ACCEPTED)
     fun runForecastCycle(@RequestBody request: RunForecastRequest): RunForecastResponse =
-        mock.runCycle(request.turbineId, request.date, validHorizon(request.horizonHours ?: 48))
+        RunForecastResponse(cycleService.start(request.turbineId, request.date, validHorizon(request.horizonHours ?: 48)), "processing")
 
     private fun validHorizon(h: Int): Int =
         if (h == 24 || h == 48) h else throw BadRequestException("horizonHours must be 24 or 48, got $h")
-
-    private fun validRevision(r: Int): Int =
-        if (r in 1..MockDataService.REVISIONS_PER_DAY) r
-        else throw BadRequestException("revision must be in 1..${MockDataService.REVISIONS_PER_DAY}, got $r")
 
     companion object {
         const val MAX_METRICS_DAYS = 366

@@ -28,7 +28,8 @@ info:
     **Метрики** — на отложенном тесте (январь 2026): факта за февраль нет.
 
 
-    **Пока демо-данные:** `/api/agent-log`, `/api/forecast/run`.
+    **Цикл агента** — `POST /api/forecast/run`, журнал — `GET /api/agent-log`. Результаты циклов
+    сохраняются; отчёт LLM из цикла подставляется в `/api/forecast`.
   version: 1.2.0
 
 servers:
@@ -212,11 +213,13 @@ paths:
   /api/forecast/run:
     post:
       tags: [Forecast]
-      summary: Запустить новый цикл прогноза вручную
+      summary: Запустить цикл агента для турбины и дня выпуска
       description: >
-        Ручной триггер полного agentic-цикла (погода → признаки → модель →
-        анализ → отчёт) для демонстрации автономности системы вживую.
-        Прогресс — поллингом `GET /api/agent-log?date=…&turbineId=…`.
+        Цикл агента: погода у турбины (fetchWeather) → прогноз ML с повторами (predict) →
+        проверка (validate) → сравнение с предыдущим выпуском (compareWithPrevious) →
+        отчёт LLM с самопроверкой (llm) → сохранение (saveForecast). Асинхронный; прогресс —
+        поллингом `GET /api/agent-log?date=…&turbineId=…` раз в 1–2 с, пока `status` = running.
+        Если цикл для этой пары уже идёт — возвращается его `cycleId`. Обычно занимает 5–15 с.
       operationId: runForecastCycle
       requestBody:
         required: true
@@ -287,29 +290,28 @@ paths:
   /api/agent-log:
     get:
       tags: [AgentLog]
-      summary: Лог шагов агента для конкретного цикла прогноза
+      summary: Журнал последнего цикла агента для турбины и дня выпуска
       description: >
-        Последовательность действий агента (получение погоды, подготовка
-        признаков, запуск модели, анализ, отчёт). Для шага получения погоды
-        `dataIssuedAt` показывает время выпуска прогноза погоды — фронт может
-        показать отметку «✓ не позже момента прогноза».
-        Если для даты цикл не запускался, возвращается 404.
+        Шаги агента с их статусами и подробностями. У шагов fetchWeather и predict
+        `dataIssuedAt` — время выпуска использованных данных погоды; оно не позже
+        `forecastIssuedAt` (отметка «✓ данные не из будущего»). Повторная попытка ML —
+        отдельный шаг со статусом retrying. 404 — цикл для этой пары ещё не запускался.
       operationId: getAgentLog
       parameters:
         - name: date
           in: query
           required: true
-          description: Дата цикла прогноза
+          description: День выпуска
           schema:
             type: string
             format: date
-          example: "2026-02-01"
+          example: "2026-02-10"
         - name: turbineId
           in: query
           required: false
+          description: По умолчанию t1
           schema:
             type: string
-        - $ref: '#/components/parameters/Revision'
       responses:
         '200':
           description: Лог шагов агента
@@ -318,24 +320,31 @@ paths:
               schema:
                 $ref: '#/components/schemas/AgentLogResponse'
               example:
-                date: "2026-02-01"
-                cycleId: "cycle_2026-02-01T00:00:00Z"
+                date: "2026-02-10"
+                cycleId: "cycle_t1_2026-02-10_1790165347"
                 revision: 1
-                forecastIssuedAt: "2026-02-01T00:00:00Z"
-                status: "completed"
-                reportSource: "mock"
+                forecastIssuedAt: "2026-02-10T07:00:00Z"
+                turbineId: "t1"
+                status: "success"
+                reportSource: "llm"
                 steps:
-                  - stepName: "Получение прогноза погоды"
+                  - stepName: "Погода у турбины"
                     status: "success"
-                    timestamp: "2026-02-01T00:00:05Z"
-                    details: "open-meteo:ecmwf_ifs, прогон от 2026-01-31T12:00:00Z"
+                    timestamp: "2026-09-23T12:09:07Z"
+                    details: "Open-Meteo ecmwf_ifs, прогон от 10.02 05:00, опубликован к 10.02 12:00 — не позже момента прогноза 10.02 12:00"
                     tool: "fetchWeather"
-                    dataIssuedAt: "2026-01-31T12:00:00Z"
-                  - stepName: "Запуск модели прогнозирования"
+                    dataIssuedAt: "2026-02-10T00:00:00Z"
+                  - stepName: "Прогноз ML"
                     status: "success"
-                    timestamp: "2026-02-01T00:00:12Z"
-                    details: "Модель: lgbm-v1, горизонт 48ч, квантили P10/P50/P90"
+                    timestamp: "2026-09-23T12:09:08Z"
+                    details: "Модель windml-2026-09-23: 48 ч, погода open-meteo-previous-runs выпущена не позже 09.02 23:00"
                     tool: "predict"
+                    dataIssuedAt: "2026-02-09T18:00:00Z"
+                  - stepName: "Сравнение с предыдущим выпуском"
+                    status: "success"
+                    timestamp: "2026-09-23T12:09:09Z"
+                    details: "Сутки 11.02: было 59 % номинала (выпуск 2026-02-09), стало 61 % (+3 %) — изменение небольшое, прогноз подтверждён."
+                    tool: "compareWithPrevious"
                     dataIssuedAt: null
         '400':
           $ref: '#/components/responses/BadRequest'
@@ -442,17 +451,6 @@ components:
       schema:
         type: string
       example: "t1"
-    Revision:
-      name: revision
-      in: query
-      required: false
-      description: Ревизия прогноза 1..4 (1 — плановая в 00:00 UTC)
-      schema:
-        type: integer
-        minimum: 1
-        maximum: 4
-        default: 1
-
   responses:
     BadRequest:
       description: Некорректные параметры
@@ -890,7 +888,8 @@ components:
         tool:
           type: string
           nullable: true
-          description: Инструмент агента, выполнивший шаг
+          description: >
+            Инструмент агента: fetchWeather, predict, validate, compareWithPrevious, llm, saveForecast
           example: "fetchWeather"
         dataIssuedAt:
           type: string
@@ -901,7 +900,7 @@ components:
 
     AgentLogResponse:
       type: object
-      required: [date, cycleId, revision, forecastIssuedAt, steps]
+      required: [date, cycleId, revision, forecastIssuedAt, steps, status]
       properties:
         date:
           type: string
@@ -917,20 +916,23 @@ components:
           type: string
           format: date-time
           example: "2026-02-01T00:00:00Z"
-        status:
-          type: string
-          nullable: true
-          description: Состояние цикла (например, processing, completed или failed)
-          example: "completed"
-        reportSource:
-          type: string
-          nullable: true
-          description: Источник отчёта цикла; null, если отчёт ещё не создан
-          example: "mock"
         steps:
           type: array
           items:
             $ref: '#/components/schemas/AgentStep'
+        turbineId:
+          type: string
+          nullable: true
+          example: "t1"
+        status:
+          type: string
+          enum: [running, success, failed]
+          description: running — цикл идёт (продолжать поллинг); failed — прогноз не принят (см. шаги)
+        reportSource:
+          type: string
+          nullable: true
+          enum: [llm, template]
+          description: llm — отчёт написала LLM и он прошёл самопроверку; template — шаблон
 
     AgentChatRequest:
       type: object

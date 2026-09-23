@@ -40,6 +40,12 @@ ml:
   evaluation-dir: ${ML_EVALUATION_DIR:../ML/outputs/training}
   scada-dir: ${ML_SCADA_DIR:../ML/data/raw}
 
+cycle:
+  # Результаты циклов агента (коммитятся — жюри видит работу агента без LLM и ML)
+  store-dir: ${CYCLE_STORE_DIR:../data/cycles}
+  # false — отчёт по шаблону, без Ollama
+  llm-report: ${CYCLE_LLM_REPORT:true}
+
 server:
   port: 8080
 

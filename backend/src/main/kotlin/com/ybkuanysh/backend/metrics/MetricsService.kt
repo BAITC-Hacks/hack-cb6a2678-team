@@ -8,7 +8,7 @@ import com.ybkuanysh.backend.forecast.ForecastAnalytics.r1
 import com.ybkuanysh.backend.forecast.ForecastAnalytics.r3
 import com.ybkuanysh.backend.forecast.ForecastService
 import com.ybkuanysh.backend.ml.MlProperties
-import com.ybkuanysh.backend.mock.MockDataService
+import com.ybkuanysh.backend.turbine.TurbineRegistry
 import org.springframework.stereotype.Service
 import java.time.LocalDate
 import kotlin.math.abs
@@ -27,7 +27,7 @@ class MetricsService(
     private val evaluations: EvaluationRepository,
     private val scada: ScadaRepository,
     private val props: MlProperties,
-    private val turbines: MockDataService,
+    private val turbines: TurbineRegistry,
 ) {
 
     /** Период отложенного теста (местные сутки) — для /api/meta. */

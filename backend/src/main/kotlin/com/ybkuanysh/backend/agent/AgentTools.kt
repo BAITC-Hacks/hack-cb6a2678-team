@@ -9,7 +9,7 @@ import com.ybkuanysh.backend.dto.Turbine
 import com.ybkuanysh.backend.forecast.ForecastService
 import com.ybkuanysh.backend.metrics.MetricsService
 import com.ybkuanysh.backend.ml.MlProperties
-import com.ybkuanysh.backend.mock.MockDataService
+import com.ybkuanysh.backend.turbine.TurbineRegistry
 import com.ybkuanysh.backend.weather.WeatherService
 import com.ybkuanysh.backend.forecast.ForecastAnalytics
 import org.springframework.ai.chat.model.ToolContext
@@ -39,7 +39,7 @@ data class AgentForecastView(
 /** Инструменты агента. Прогноз — ML-сервис, погода — Open-Meteo, метрики пока на моках. */
 @Component
 class AgentTools(
-    private val mock: MockDataService,
+    private val turbines: TurbineRegistry,
     private val weather: WeatherService,
     private val forecasts: ForecastService,
     private val metrics: MetricsService,
@@ -51,7 +51,7 @@ class AgentTools(
 
     @Tool(description = "Список турбин ВЭС с идентификаторами и координатами")
     fun listTurbines(ctx: ToolContext): List<Turbine> =
-        traced(ctx, "listTurbines", emptyMap()) { mock.turbines }
+        traced(ctx, "listTurbines", emptyMap()) { turbines.turbines }
 
     @Tool(
         description = "Прогноз выработки турбины (ML-модель) на календарные дни по местному времени. Прогноз выпускается накануне первого " +
@@ -133,7 +133,7 @@ class AgentTools(
             val to = toDate?.takeIf { it.isNotBlank() }?.let { parseDate(it) } ?: from
             val days = ChronoUnit.DAYS.between(from, to) + 1
             require(days in 1..MAX_WEATHER_DAYS) { "Период должен быть от 1 до $MAX_WEATHER_DAYS дней, получено: $date–$toDate" }
-            val turbine = mock.requireTurbine(turbineId)
+            val turbine = turbines.requireTurbine(turbineId)
             val at = from.atStartOfDay(zone).toInstant()
             weather.forecastAt(turbine.lat, turbine.lon, at, (days * 24).toInt()).toAgentView(turbineId, d, zone)
         }
@@ -229,13 +229,19 @@ internal fun forecastConclusions(fc: ForecastResponse, zone: ZoneId): List<Strin
     val label = zoneLabel(zone)
     val days = fc.points.groupBy { dayFormat(zone).format(it.timestamp) }.map { (day, points) ->
         val s = ForecastAnalytics.summary(points)
-        "За $day: средняя мощность ${s.meanPower} (${pct(s.meanPower)} номинала), пик ${s.maxPower} в ${hour.format(s.maxPowerAt)} $label, " +
+        "За $day: средняя мощность ${pct(s.meanPower)} номинала, пик ${pct(s.maxPower)} в ${hour.format(s.maxPowerAt)} $label, " +
             "часов почти без выработки (< ${pct(ForecastAnalytics.LOW_POWER)}): ${s.lowPowerHours} из ${points.size}."
     }
+    // Одно предупреждение — одна строка со всеми его интервалами: так короче и модели проще пересказать
     val alerts = if (fc.alerts.isEmpty()) {
         listOf("Предупреждений нет.")
     } else {
-        fc.alerts.map { "Предупреждение (${it.severity}): ${it.message} — ${hour.format(it.from)}…${hour.format(it.to)} $label." }
+        fc.alerts.groupBy { it.message }.map { (message, list) ->
+            val intervals = list.joinToString(", ") {
+                if (it.from == it.to) "в ${hour.format(it.from)}" else "${hour.format(it.from)}–${hour.format(it.to)}"
+            }
+            "Предупреждение (${list.first().severity}): $message — $intervals ($label)."
+        }
     }
     val issued = "Прогноз выпущен ${hour.format(fc.forecastIssuedAt)} $label; использована погода, выпущенная не позже ${hour.format(fc.weatherIssuedAt)} $label."
     return days + alerts + issued

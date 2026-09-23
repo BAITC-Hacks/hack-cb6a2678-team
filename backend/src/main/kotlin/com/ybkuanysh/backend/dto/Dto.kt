@@ -126,14 +126,18 @@ data class AgentStep(
     val dataIssuedAt: Instant?,
 )
 
+enum class CycleStatus { running, success, failed }
+
 data class AgentLogResponse(
     val date: LocalDate,
     val cycleId: String,
     val revision: Int,
     val forecastIssuedAt: Instant,
     val steps: List<AgentStep>,
-    val status: String? = null,
-    val reportSource: String? = null,
+    val turbineId: String?,
+    val status: CycleStatus,
+    /** llm — отчёт написала LLM, template — шаблон (LLM недоступна или выключена). */
+    val reportSource: String?,
 )
 
 data class RunForecastRequest(

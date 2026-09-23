@@ -2,7 +2,7 @@ package com.ybkuanysh.backend.weather
 
 import com.ybkuanysh.backend.api.BadRequestException
 import com.ybkuanysh.backend.dto.WeatherResponse
-import com.ybkuanysh.backend.mock.MockDataService
+import com.ybkuanysh.backend.turbine.TurbineRegistry
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
@@ -12,7 +12,7 @@ import java.time.Instant
 
 @RestController
 @RequestMapping("/api/weather")
-class WeatherController(private val weather: WeatherService, private val mock: MockDataService) {
+class WeatherController(private val weather: WeatherService, private val turbines: TurbineRegistry) {
 
     @GetMapping
     fun getWeather(
@@ -21,7 +21,7 @@ class WeatherController(private val weather: WeatherService, private val mock: M
         @RequestParam(defaultValue = "48") horizonHours: Int,
     ): WeatherResponse {
         if (horizonHours !in 1..72) throw BadRequestException("horizonHours must be in 1..72, got $horizonHours")
-        val turbine = mock.requireTurbine(turbineId)
+        val turbine = turbines.requireTurbine(turbineId)
         return WeatherResponse(turbineId, weather.forecastAt(turbine.lat, turbine.lon, at, horizonHours))
     }
 }

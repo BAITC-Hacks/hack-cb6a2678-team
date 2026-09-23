@@ -41,7 +41,8 @@ docs/                       — документация
   клиент `backend/.../ml/`): выпуск в день D 12:00 местного (Asia/Almaty) на сутки D+1 и D+2.
   `/api/metrics` — **реальная точность на отложенном тесте (январь 2026)**: факта за февраль в данных нет
   (`backend/.../metrics/`, прогнозы теста ML + SCADA для бейзлайна).
-  `/api/agent-log`, `/api/forecast/run` пока **отдают моки** (`backend/.../mock/MockDataService.kt`).
+  `/api/forecast/run` + `/api/agent-log` — **настоящий цикл агента** (`backend/.../cycle/`): погода → ML → проверка →
+  сравнение с прошлым выпуском → отчёт LLM с самопроверкой → сохранение в `data/cycles/`. Моков в бэкенде больше нет.
 - LLM-агент работает: `POST /api/agent/chat`, Spring AI + Ollama (`qwen3:8b`), инструменты поверх моков.
 - Клиент погоды работает: `backend/.../weather/`, `GET /api/weather` — реальные архивные прогнозы ECMWF IFS
   (Open-Meteo Single Runs API) с защитой от утечки и кэшем в `data/weather-cache/`.

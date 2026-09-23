@@ -44,10 +44,10 @@
 | Задача | Кто | Статус |
 |---|---|---|
 | Агент-чат на Spring AI + Ollama | бэкенд | ✅ (поверх моков) |
-| Инструменты цикла: `fetchWeather`, `predict`, `validate`, `compareWithPrevious`, `saveForecast` | бэкенд | ⬜ |
-| `POST /api/forecast/run` запускает реальный цикл, шаги пишутся в `agent-log` | бэкенд | ⬜ |
-| Отчёт `agentReport` пишет LLM (сейчас шаблон) | бэкенд | ⬜ |
-| Режим без LLM (жёсткий порядок шагов, шаблонный отчёт) | бэкенд | ⬜ |
+| Инструменты цикла: `fetchWeather`, `predict`, `validate`, `compareWithPrevious`, `saveForecast` | бэкенд | ✅ |
+| `POST /api/forecast/run` запускает реальный цикл, шаги пишутся в `agent-log` | бэкенд | ✅ |
+| Отчёт `agentReport` пишет LLM, с самопроверкой на выдуманные значения | бэкенд | ✅ |
+| Режим без LLM (жёсткий порядок шагов, шаблонный отчёт) | бэкенд | ✅ `CYCLE_LLM_REPORT=false` |
 | Ограничить чат темой ВЭС в системном промпте | бэкенд | ⬜ |
 
 ## Этап 5. Backtest

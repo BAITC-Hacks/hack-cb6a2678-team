@@ -12,7 +12,7 @@ import com.ybkuanysh.backend.ml.MlForecastSource
 import com.ybkuanysh.backend.ml.MlIssue
 import com.ybkuanysh.backend.ml.MlProperties
 import com.ybkuanysh.backend.ml.MlUnavailableException
-import com.ybkuanysh.backend.mock.MockDataService
+import com.ybkuanysh.backend.turbine.TurbineRegistry
 import com.ybkuanysh.backend.weather.LeakageException
 import com.ybkuanysh.backend.weather.WeatherService
 import com.ybkuanysh.backend.weather.WeatherUnavailableException
@@ -39,10 +39,13 @@ class ForecastService(
     private val ml: MlForecastSource,
     private val props: MlProperties,
     private val weather: WeatherService,
-    private val turbines: MockDataService,
+    private val turbines: TurbineRegistry,
 ) {
 
     private val log = LoggerFactory.getLogger(javaClass)
+
+    /** Момент выпуска D 12:00 местного — как его задаёт ML (пока ML не отдаёт issued_at_utc сам). */
+    fun issuedAt(issueDate: LocalDate): Instant = issueDate.atTime(props.issueHourLocal, 0).atZone(ZoneId.of(props.localTz)).toInstant()
 
     fun forecast(turbineId: String, issueDate: LocalDate, horizonHours: Int): ForecastResponse =
         issued(turbineId, issueDate, horizonHours).response

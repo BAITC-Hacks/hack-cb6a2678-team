@@ -17,6 +17,9 @@ backend/src/main/kotlin/com/ybkuanysh/backend/
 │  └─ AgentWeatherView.kt   — компактный вид погоды для LLM: итоги и готовые выводы по дням
 ├─ config/WebConfig.kt      — CORS для /api/**, бин Clock
 ├─ ml/                     — клиент ML-сервиса по contracts/ml-service.openapi.yaml (модели ответа, RestClient)
+├─ cycle/                  — цикл агента: ForecastCycleService (шаги, повторы, проверки), CycleStore (память + JSON),
+│                             ReportWriter (отчёт LLM + самопроверка unsupportedValues)
+├─ turbine/TurbineRegistry.kt — турбины и координаты
 ├─ metrics/                — точность на отложенном тесте: EvaluationRepository (ML /v1/evaluation или CSV),
 │                             ScadaRepository (факт для бейзлайна persistence), MetricsService
 ├─ forecast/
@@ -29,7 +32,6 @@ backend/src/main/kotlin/com/ybkuanysh/backend/
 │  ├─ WeatherModels.kt      — WeatherHour (как в ML-контракте), WeatherRun, WeatherForecast, исключения
 │  └─ WeatherProperties.kt  — настройки weather.*
 ├─ dto/Dto.kt               — все DTO публичного API
-└─ mock/MockDataService.kt  — детерминированные моки (будут заменены реальными сервисами)
 
 backend/src/main/resources/
 ├─ application.yaml         — настройки Ollama, ретраи, таймауты, Swagger
@@ -57,6 +59,8 @@ open http://localhost:8080/swagger-ui.html
 | `ML_LOCAL_TZ` | `Asia/Almaty` | местный пояс станции (пока ML не отдаёт `local_tz` сам) |
 | `ML_EVALUATION_DIR` | `../ML/outputs/training` | CSV отложенного теста, пока ML не отдаёт `/v1/evaluation` |
 | `ML_SCADA_DIR` | `../ML/data/raw` | SCADA из датасета — для бейзлайна persistence |
+| `CYCLE_STORE_DIR` | `../data/cycles` | куда сохранять циклы агента (JSON) |
+| `CYCLE_LLM_REPORT` | `true` | `false` — отчёт по шаблону, без Ollama |
 | `WEATHER_MODEL` | `ecmwf_ifs` | модель Open-Meteo |
 | `WEATHER_PUBLICATION_DELAY` | `7h` | через сколько после инициализации прогон считается опубликованным |
 | `WEATHER_CACHE_DIR` | `../data/weather-cache` | кэш ответов (путь от `backend/`) |
@@ -128,10 +132,9 @@ fun myTool(
 
 ## Что дальше (см. `roadmap.md`)
 
-1. Заполнить кэш погоды за весь backtest и закоммитить.
-2. HTTP-клиент к ML-сервису по `contracts/ml-service.openapi.yaml`.
-3. Реальный цикл агента на `POST /forecast/run` с записью шагов в `agent-log`.
-4. Backtest-раннер и хранилище; замена `MockDataService` реальными сервисами без изменения API.
+1. Backtest-раннер: цикл агента для всех дат 31.01–26.02 × 2 турбины на финальной модели, результаты в
+   `data/cycles/` коммитятся; заодно заполняется кэш погоды `data/weather-cache/`.
+2. Dockerfile бэкенда и все сервисы в `docker-compose.yml`.
 
 ## Грабли
 

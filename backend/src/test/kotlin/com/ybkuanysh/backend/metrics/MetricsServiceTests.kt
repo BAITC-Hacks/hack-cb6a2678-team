@@ -5,7 +5,7 @@ import com.ybkuanysh.backend.ml.MlEvaluationResponse
 import com.ybkuanysh.backend.ml.MlEvaluationRow
 import com.ybkuanysh.backend.ml.MlForecastSource
 import com.ybkuanysh.backend.ml.MlProperties
-import com.ybkuanysh.backend.mock.MockDataService
+import com.ybkuanysh.backend.turbine.TurbineRegistry
 import com.ybkuanysh.backend.support.FixtureMl
 import com.ybkuanysh.backend.weather.WeatherProperties
 import com.ybkuanysh.backend.weather.WeatherRunSource
@@ -25,7 +25,7 @@ class MetricsServiceTests {
 
     private fun service(ml: MlForecastSource = FixtureMl()): MetricsService {
         val weather = WeatherService(WeatherRunSource { _, _, _, _ -> error("no network") }, WeatherProperties(offline = true), JsonMapper.builder().build())
-        return MetricsService(EvaluationRepository(ml, props), ScadaRepository(props), props, MockDataService(Clock.systemUTC(), weather))
+        return MetricsService(EvaluationRepository(ml, props), ScadaRepository(props), props, TurbineRegistry())
     }
 
     private val jan1 = LocalDate.parse("2026-01-01")

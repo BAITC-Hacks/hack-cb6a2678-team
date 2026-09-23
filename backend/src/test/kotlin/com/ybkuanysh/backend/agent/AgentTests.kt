@@ -1,7 +1,7 @@
 package com.ybkuanysh.backend.agent
 
 import com.ybkuanysh.backend.dto.AgentToolCall
-import com.ybkuanysh.backend.mock.NotFoundException
+import com.ybkuanysh.backend.turbine.NotFoundException
 import org.junit.jupiter.api.Test
 import java.time.Instant
 import org.springframework.ai.chat.model.ToolContext
