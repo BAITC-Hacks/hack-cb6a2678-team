@@ -132,6 +132,8 @@ data class AgentLogResponse(
     val revision: Int,
     val forecastIssuedAt: Instant,
     val steps: List<AgentStep>,
+    val status: String? = null,
+    val reportSource: String? = null,
 )
 
 data class RunForecastRequest(

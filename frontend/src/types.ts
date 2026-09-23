@@ -141,6 +141,8 @@ export interface AgentLogResponse {
   cycleId: string
   revision: number
   forecastIssuedAt: string
+  status?: string | null
+  reportSource?: string | null
   steps: AgentStep[]
 }
 

@@ -293,6 +293,7 @@ paths:
         признаков, запуск модели, анализ, отчёт). Для шага получения погоды
         `dataIssuedAt` показывает время выпуска прогноза погоды — фронт может
         показать отметку «✓ не позже момента прогноза».
+        Если для даты цикл не запускался, возвращается 404.
       operationId: getAgentLog
       parameters:
         - name: date
@@ -321,6 +322,8 @@ paths:
                 cycleId: "cycle_2026-02-01T00:00:00Z"
                 revision: 1
                 forecastIssuedAt: "2026-02-01T00:00:00Z"
+                status: "completed"
+                reportSource: "mock"
                 steps:
                   - stepName: "Получение прогноза погоды"
                     status: "success"
@@ -914,6 +917,16 @@ components:
           type: string
           format: date-time
           example: "2026-02-01T00:00:00Z"
+        status:
+          type: string
+          nullable: true
+          description: Состояние цикла (например, processing, completed или failed)
+          example: "completed"
+        reportSource:
+          type: string
+          nullable: true
+          description: Источник отчёта цикла; null, если отчёт ещё не создан
+          example: "mock"
         steps:
           type: array
           items:

@@ -15,10 +15,20 @@ import type {
 
 const BASE = '/api'
 
+export class ApiError extends Error {
+  readonly status: number
+
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as ErrorResponse | null
-    throw new Error(body?.message ?? `${res.status} ${res.statusText}`)
+    throw new ApiError(body?.message ?? `${res.status} ${res.statusText}`, res.status)
   }
   return res.json() as Promise<T>
 }

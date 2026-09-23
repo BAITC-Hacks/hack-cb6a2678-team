@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getAgentLog, runForecastCycle } from '../api'
+import { ApiError, getAgentLog, runForecastCycle } from '../api'
 import type { AgentLogResponse, AgentStepStatus, HorizonHours } from '../types'
 
 const POLL_INTERVAL_MS = 2000
@@ -17,11 +17,25 @@ const STATUS_LABEL: Record<AgentStepStatus, string> = {
   running: 'Выполняется',
 }
 
-// Лог "в процессе", только если последний шаг ещё не завершён — так отличаем
-// живой ручной запуск (MockDataService.manualLog) от планового лога
-// (MockDataService.scheduledLog), который всегда приходит уже целиком.
+const CYCLE_STATUS_LABEL: Record<string, string> = {
+  processing: 'Выполняется',
+  running: 'Выполняется',
+  completed: 'Завершён',
+  success: 'Завершён',
+  failed: 'Ошибка',
+}
+
+const REPORT_SOURCE_LABEL: Record<string, string> = {
+  mock: 'Демо-данные',
+  llm: 'LLM',
+  fallback: 'Резервный отчёт',
+}
+
+// Для старых ответов без status определяем активный цикл по последнему шагу.
 function isInProgress(log: AgentLogResponse | null): boolean {
-  if (!log || log.steps.length === 0) return false
+  if (!log) return false
+  if (log.status) return log.status === 'processing' || log.status === 'running'
+  if (log.steps.length === 0) return false
   const last = log.steps[log.steps.length - 1]
   return last.status === 'running' || last.status === 'retrying'
 }
@@ -46,13 +60,9 @@ export function AgentLogPanel({ turbineId, date, horizonHours }: Props) {
   const [revision, setRevision] = useState(1)
   const [log, setLog] = useState<AgentLogResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [notFound, setNotFound] = useState(false)
   const [running, setRunning] = useState(false)
   const [pollKey, setPollKey] = useState(0)
-
-  // Смена даты/турбины — сбрасываем на плановый цикл 00 UTC.
-  useEffect(() => {
-    setRevision(1)
-  }, [turbineId, date])
 
   useEffect(() => {
     let cancelled = false
@@ -71,16 +81,19 @@ export function AgentLogPanel({ turbineId, date, horizonHours }: Props) {
           if (cancelled) return
           setLog(res)
           setError(null)
+          setNotFound(false)
           if (!isInProgress(res)) stop()
         })
         .catch((e: Error) => {
           if (cancelled) return
-          setError(e.message)
+          const cycleMissing = e instanceof ApiError && e.status === 404 && !/turbine|турбин/i.test(e.message)
+          setLog(null)
+          setNotFound(cycleMissing)
+          setError(cycleMissing ? null : e.message)
           stop()
         })
     }
 
-    setLog(null)
     load()
     intervalId = window.setInterval(load, POLL_INTERVAL_MS)
 
@@ -94,12 +107,23 @@ export function AgentLogPanel({ turbineId, date, horizonHours }: Props) {
     setRunning(true)
     setError(null)
     runForecastCycle({ turbineId, date, horizonHours })
-      .then(() => setPollKey((k) => k + 1))
+      .then(() => {
+        setLog(null)
+        setNotFound(false)
+        setPollKey((k) => k + 1)
+      })
       .catch((e: Error) => setError(e.message))
       .finally(() => setRunning(false))
   }
 
   const live = isInProgress(log)
+
+  const selectRevision = (value: number) => {
+    setLog(null)
+    setError(null)
+    setNotFound(false)
+    setRevision(value)
+  }
 
   return (
     <div className="agent-log-panel">
@@ -114,7 +138,7 @@ export function AgentLogPanel({ turbineId, date, horizonHours }: Props) {
               key={r}
               type="button"
               className={r === revision ? 'agent-revision-btn active' : 'agent-revision-btn'}
-              onClick={() => setRevision(r)}
+              onClick={() => selectRevision(r)}
             >
               {AGENT_REVISION_LABEL[r]}
             </button>
@@ -122,9 +146,16 @@ export function AgentLogPanel({ turbineId, date, horizonHours }: Props) {
         </div>
       </div>
 
-      {error && <pre className="error">Ошибка: {error}</pre>}
+      {log && (
+        <div className="agent-log-meta">
+          <span>Статус цикла: <strong>{CYCLE_STATUS_LABEL[log.status ?? ''] ?? log.status ?? 'не указан'}</strong></span>
+          <span>Источник отчёта: <strong>{REPORT_SOURCE_LABEL[log.reportSource ?? ''] ?? log.reportSource ?? 'ещё не создан'}</strong></span>
+        </div>
+      )}
 
-      {log ? (
+      {error ? <p className="error">Ошибка: {error}</p> : notFound ? (
+        <p className="agent-log-empty">Для выбранной даты и цикла запусков пока нет.</p>
+      ) : log ? (
         <ol className="agent-log-steps">
           {log.steps.map((s, i) => (
             <li key={i} className={`agent-step agent-step-${s.status}`}>

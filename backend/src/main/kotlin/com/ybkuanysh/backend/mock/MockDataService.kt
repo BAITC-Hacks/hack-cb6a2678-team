@@ -160,7 +160,7 @@ class MockDataService(private val clock: Clock, private val weather: WeatherServ
             if (i > 0) t = t.plusSeconds(if (i == 2) 5 else 2)
             steps += AgentStep(tpl.name, AgentStepStatus.success, t, tpl.details, tpl.tool, weatherIssuedAt.takeIf { i == 0 })
         }
-        return AgentLogResponse(date, "cycle_$start", revision, start, steps)
+        return AgentLogResponse(date, "cycle_$start", revision, start, steps, status = "completed", reportSource = "mock")
     }
 
     /** Ручной запуск: шаги «проходят» по одному каждые STEP_DURATION — удобно для поллинга с фронта. */
@@ -169,7 +169,8 @@ class MockDataService(private val clock: Clock, private val weather: WeatherServ
         val weatherIssuedAt = weather.latestAvailableRun(issuedAt)
         val elapsed = Duration.between(run.startedAt, clock.instant())
         val done = (elapsed.toMillis() / STEP_DURATION.toMillis()).toInt()
-        val steps = stepTemplates(run.horizonHours, 1, weatherIssuedAt).take(done + 1).mapIndexed { i, tpl ->
+        val templates = stepTemplates(run.horizonHours, 1, weatherIssuedAt)
+        val steps = templates.take(done + 1).mapIndexed { i, tpl ->
             val finished = i < done
             AgentStep(
                 stepName = tpl.name,
@@ -180,7 +181,12 @@ class MockDataService(private val clock: Clock, private val weather: WeatherServ
                 dataIssuedAt = weatherIssuedAt.takeIf { finished && i == 0 },
             )
         }
-        return AgentLogResponse(run.date, run.cycleId, 1, issuedAt, steps)
+        val completed = done >= templates.size
+        return AgentLogResponse(
+            run.date, run.cycleId, 1, issuedAt, steps,
+            status = if (completed) "completed" else "processing",
+            reportSource = if (completed) "mock" else null,
+        )
     }
 
     // --- синтетическая физика ---

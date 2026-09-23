@@ -10,6 +10,7 @@ import { ForecastSummaryTiles } from './components/ForecastSummaryTiles'
 import { ForecastVersions } from './components/ForecastVersions'
 import { HorizonSelector } from './components/HorizonSelector'
 import { MetricsCards } from './components/MetricsCards'
+import { SiteTour } from './components/SiteTour'
 import { TurbineMap } from './components/TurbineMap'
 import { TurbineSelector } from './components/TurbineSelector'
 import type {
@@ -20,6 +21,7 @@ import type {
   MetricsResponse,
   Turbine,
 } from './types'
+import { hasCompletedSiteTour } from './siteTourStorage'
 import './App.css'
 
 const FALLBACK_FROM = '2026-01-31'
@@ -38,6 +40,7 @@ function App() {
   const [date, setDate] = useState('2026-02-01')
   const [horizonHours, setHorizonHours] = useState<HorizonHours>(48)
   const [showActual, setShowActual] = useState(false)
+  const [showTour, setShowTour] = useState(() => !hasCompletedSiteTour())
 
   const [forecast, setForecast] = useState<ForecastResponse | null>(null)
   const [revisions, setRevisions] = useState<ForecastRevision[]>([])
@@ -47,6 +50,7 @@ function App() {
   // v1.2: /forecast/revisions хочет целевые сутки, а не день выпуска. Прогноз, выпущенный
   // в `date`, покрывает сутки date+1/date+2 — показываем версии для первых из них (date+1).
   const revisionsTargetDate = addDays(date, 1)
+  const actualAvailable = forecast?.points.some((point) => point.actualPower !== null) ?? false
 
   useEffect(() => {
     getMeta()
@@ -87,15 +91,24 @@ function App() {
           <h1>WES Forecast Dashboard</h1>
           <span>Agentic AI-прогноз выработки ВЭС</span>
         </div>
+        <button type="button" className="tour-open-btn" onClick={() => setShowTour(true)}>
+          Как пользоваться
+        </button>
         <div className="filters">
-          <TurbineSelector turbines={turbines} value={turbineId} onChange={setTurbineId} />
-          <DateSelector
-            value={date}
-            onChange={setDate}
-            from={meta?.backtestFrom ?? FALLBACK_FROM}
-            to={meta?.backtestTo ?? FALLBACK_TO}
-          />
-          <HorizonSelector value={horizonHours} onChange={setHorizonHours} options={meta?.horizons ?? [24, 48]} />
+          <div data-tour="turbine">
+            <TurbineSelector turbines={turbines} value={turbineId} onChange={setTurbineId} />
+          </div>
+          <div data-tour="date">
+            <DateSelector
+              value={date}
+              onChange={setDate}
+              from={meta?.backtestFrom ?? FALLBACK_FROM}
+              to={meta?.backtestTo ?? FALLBACK_TO}
+            />
+          </div>
+          <div data-tour="horizon">
+            <HorizonSelector value={horizonHours} onChange={setHorizonHours} options={meta?.horizons ?? [24, 48]} />
+          </div>
         </div>
       </header>
 
@@ -112,7 +125,7 @@ function App() {
         </section>
 
         <section className="bento-tile bento-tile-forecast">
-          <div className="section-header">
+          <div className="section-header" data-tour="forecast">
             <h2>Почасовой прогноз выработки</h2>
           </div>
           <div className="bento-tile-content">
@@ -126,14 +139,23 @@ function App() {
                     issueTimeLocal={meta?.issueTimeLocal ?? null}
                     localTz={meta?.localTz ?? null}
                   />
-                  <label className="show-actual-toggle">
-                    <input
-                      type="checkbox"
-                      checked={showActual}
-                      onChange={(e) => setShowActual(e.target.checked)}
-                    />
-                    Показать факт
-                  </label>
+                  <div className="actual-control">
+                    <label className={`show-actual-toggle${actualAvailable ? '' : ' show-actual-toggle-disabled'}`}>
+                      <input
+                        type="checkbox"
+                        checked={actualAvailable && showActual}
+                        disabled={!actualAvailable}
+                        aria-describedby={actualAvailable ? undefined : 'actual-unavailable'}
+                        onChange={(e) => setShowActual(e.target.checked)}
+                      />
+                      Показать факт
+                    </label>
+                    {!actualAvailable && (
+                      <span id="actual-unavailable" className="actual-unavailable">
+                        Факт за выбранные часы отсутствует в данных
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <ForecastChart points={forecast.points} showActual={showActual} />
                 <ForecastSummaryTiles summary={forecast.summary} />
@@ -147,10 +169,9 @@ function App() {
         </section>
 
         <section className="bento-tile bento-tile-metrics">
-          <div className="section-header">
+          <div className="section-header" data-tour="metrics">
             <h2>
-              Качество на отложенном тесте ·{' '}
-              {metrics ? `${metrics.periodFrom} – ${metrics.periodTo}` : (meta?.metricsFrom ?? '…')}
+              Качество на отложенном тесте · январь 2026
             </h2>
           </div>
           <div className="bento-tile-content">
@@ -159,16 +180,16 @@ function App() {
         </section>
 
         <section className="bento-tile bento-tile-agent">
-          <div className="section-header">
+          <div className="section-header" data-tour="agent">
             <h2>Agent trace</h2>
           </div>
           <div className="bento-tile-content">
-            <AgentLogPanel turbineId={turbineId} date={date} horizonHours={horizonHours} />
+            <AgentLogPanel key={`${turbineId}:${date}`} turbineId={turbineId} date={date} horizonHours={horizonHours} />
           </div>
         </section>
 
         <section className="bento-tile bento-tile-chat">
-          <div className="section-header">
+          <div className="section-header" data-tour="chat">
             <h2>Чат с агентом</h2>
           </div>
           <div className="bento-tile-content">
@@ -176,6 +197,7 @@ function App() {
           </div>
         </section>
       </div>
+      {showTour && <SiteTour onClose={() => setShowTour(false)} />}
     </div>
   )
 }

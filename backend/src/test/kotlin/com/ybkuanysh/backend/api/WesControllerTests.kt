@@ -113,6 +113,8 @@ class WesControllerTests(@Autowired val mvc: MockMvc) {
             status { isOk() }
             jsonPath("$.cycleId") { value("cycle_2026-02-01T00:00:00Z") }
             jsonPath("$.revision") { value(1) }
+            jsonPath("$.status") { value("completed") }
+            jsonPath("$.reportSource") { value("mock") }
             jsonPath("$.steps.length()") { value(5) }
             jsonPath("$.steps[0].status") { value("success") }
             jsonPath("$.steps[0].tool") { value("fetchWeather") }
@@ -138,6 +140,8 @@ class WesControllerTests(@Autowired val mvc: MockMvc) {
         }
         mvc.get("/api/agent-log?date=2026-02-15&turbineId=t2").andExpect {
             status { isOk() }
+            jsonPath("$.status") { value("processing") }
+            jsonPath("$.reportSource") { doesNotExist() }
             jsonPath("$.steps[0].status") { value("running") }
         }
         mvc.post("/api/forecast/run") {
