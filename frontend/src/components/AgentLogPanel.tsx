@@ -26,9 +26,8 @@ const CYCLE_STATUS_LABEL: Record<string, string> = {
 }
 
 const REPORT_SOURCE_LABEL: Record<string, string> = {
-  mock: 'Демо-данные',
-  llm: 'LLM',
-  fallback: 'Резервный отчёт',
+  llm: 'LLM (прошёл самопроверку)',
+  template: 'Шаблон (LLM недоступна или отчёт отклонён самопроверкой)',
 }
 
 // Для старых ответов без status определяем активный цикл по последнему шагу.

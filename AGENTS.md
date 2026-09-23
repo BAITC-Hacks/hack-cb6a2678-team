@@ -1,110 +1,116 @@
 # AGENTS.md — контекст проекта для AI-ассистентов (Claude Code, Codex и др.)
 
 Этот файл читают AI-ассистенты перед работой с репозиторием. Людям он тоже полезен как краткая шпаргалка.
-Подробности — в `docs/` (индекс: `docs/README.md`).
+Для жюри — [README.md](README.md). Подробности — `docs/` (индекс: `docs/README.md`).
 
 ## Что за проект
 
 Хакатон HackAlem AI, кейс «Agentic AI для прогнозирования выработки ВЭС».
-Система сама, без человека, строит почасовой прогноз выработки ветроэлектростанции (2 турбины) на 24–48 ч:
-берёт архивный прогноз погоды → ML-модель переводит погоду в мощность → агент проверяет результат,
-пишет отчёт и предупреждения → пересчитывает при выходе свежей погоды.
+Система сама строит почасовой прогноз выработки ветроэлектростанции (2 турбины) на 24–48 ч: выпуск в день D
+в 12:00 местного → сутки D+1 и D+2. Цикл агента: погода у турбины → прогноз ML → проверка → сравнение с прошлым
+выпуском → отчёт LLM с самопроверкой → сохранение.
 
-Проверка — backtest: прогнозы «как если бы» на каждую дату с **2026-01-31 по 2026-02-27**,
-сравнение с фактом из выданных данных. Полное ТЗ и критерии оценки — `docs/task.md`.
+Backtest — выпуски 31.01–26.02.2026 (покрывают весь февраль), результаты в `data/cycles/`.
+Факта за февраль в данных нет, поэтому точность меряется на отложенном январе 2026. ТЗ и критерии — `docs/task.md`.
 
 ## Команда и зоны ответственности
 
 | Роль | Зона | Документ |
 |---|---|---|
-| Бэкенд (Spring Boot + Kotlin + Spring AI) | `backend/` — API, агент, погода, хранение, backtest | `docs/backend.md` |
-| ML (Python) | `ml/` (будет) — модель и FastAPI-сервис `/predict` | `docs/ml.md` |
-| Фронтенд (React) | `frontend/` (будет) — 4 экрана | `docs/frontend.md` |
+| Бэкенд (Spring Boot + Kotlin + Spring AI) | `backend/` — API, агент, погода, метрики, хранение циклов | `docs/backend.md` |
+| ML (Python) | `ML/` — модель, FastAPI `/v1/forecast`, `/v1/evaluation` | `ML/README.md`, `ML/TRAINING.md` |
+| Фронтенд (React) | `frontend/` — дашборд, журнал агента, метрики, чат | `docs/frontend.md` |
 
 ## Структура репозитория
 
 ```
 AGENTS.md / CLAUDE.md       — этот контекст
-README.md                   — запуск
-docker-compose.yml          — Ollama + загрузка модели (позже: все сервисы)
-contracts/ml-service.openapi.yaml       — контракт ML-сервиса (бэкенд ↔ ML)
-backend/src/main/resources/static/openapi.yaml — контракт публичного API (фронт ↔ бэкенд), источник правды
+README.md                   — для жюри: что сделано, запуск, проверка, ограничения
+docker-compose.yml          — все сервисы: ml, backend, frontend, ollama
+contracts/ml-service.openapi.yaml       — контракт бэкенд ↔ ML (v2.0)
+backend/src/main/resources/static/openapi.yaml — контракт фронт ↔ бэкенд (v1.2), источник правды для Swagger
 backend/                    — Spring Boot 4.1, Kotlin 2.3, Spring AI 2.0.1, Java toolchain 17
-data/weather-cache/         — кэш ответов Open-Meteo (коммитится — офлайн-воспроизводимость)
-ML/                         — Python ML-сервис (FastAPI :8000), модели, кэш погоды для обучения
-docs/                       — документация
+ML/                         — Python ML-сервис (FastAPI :8000), модели, датасет, кэш погоды Previous Runs
+frontend/                   — React 19 + Vite; в Docker — nginx с прокси /api
+data/cycles/                — результаты backtest: циклы агента <турбина>/<дата выпуска>.json (коммитятся)
+data/weather-cache/         — кэш Open-Meteo Single Runs для агента (коммитится — офлайн-воспроизводимость)
+scripts/backtest.py         — прогон цикла агента по всем датам × турбинам
+docs/                       — документация; docs/archive/ — завершённые планы и задания
 ```
 
 ## Текущее состояние (обновлять при изменениях!)
 
-- Публичный API v1.2. `/api/forecast` и `/api/forecast/revisions` — **реальный прогноз ML** (`backend/.../forecast/`,
-  клиент `backend/.../ml/`): выпуск в день D 12:00 местного (Asia/Almaty) на сутки D+1 и D+2.
-  `/api/metrics` — **реальная точность на отложенном тесте (январь 2026)**: факта за февраль в данных нет
-  (`backend/.../metrics/`, прогнозы теста ML + SCADA для бейзлайна).
-  `/api/forecast/run` + `/api/agent-log` — **настоящий цикл агента** (`backend/.../cycle/`): погода → ML → проверка →
-  сравнение с прошлым выпуском → отчёт LLM с самопроверкой → сохранение в `data/cycles/`. Моков в бэкенде больше нет.
-- LLM-агент работает: `POST /api/agent/chat`, Spring AI + Ollama (`qwen3:8b`), инструменты поверх моков.
-- Клиент погоды работает: `backend/.../weather/`, `GET /api/weather` — реальные архивные прогнозы ECMWF IFS
-  (Open-Meteo Single Runs API) с защитой от утечки и кэшем в `data/weather-cache/`.
-- Агент: `getForecast`/`getForecastRevisions` — ML, `getWeather` — Open-Meteo, `getMetrics` — отложенный тест (январь).
-  Дни и время для агента — местные (так спрашивает диспетчер и так ML задаёт сутки).
-- ML в `ML/`: обучение, модели двух турбин, погодный кэш (Previous Runs, ECMWF/GFS/ICON), FastAPI `/v1/forecast`,
-  офлайн-тесты. Запуск и результаты — `ML/README.md`, `ML/TRAINING.md`. Агент один — в `backend/`
-  (Java-агент из `ML/spring-agent` удалён). С бэкендом состыкован по `contracts/ml-service.openapi.yaml`;
-  план и оставшиеся шаги — `docs/ml-integration.md`, задачи ML — `docs/ml-tasks.md`.
-- Не сделано: интеграция ML с основным бэкендом, реальный цикл агента и backtest в нём.
-- План и статус этапов — `docs/roadmap.md`.
+Всё работает на реальных данных, моков нет.
+
+- **Прогноз:** `/api/forecast` — ML (`backend/.../forecast/`, клиент `backend/.../ml/`), поля v2 контракта ML
+  (время UTC, погода по часам, граница выпуска погоды) используются напрямую. `/api/forecast/revisions` — версии
+  прогноза одних суток из выпусков X−2 и X−1.
+- **Цикл агента:** `POST /api/forecast/run` + `GET /api/agent-log` (`backend/.../cycle/`). Отчёт LLM проходит
+  самопроверку (`unsupportedValues`): времена и проценты из текста должны быть в данных, иначе — шаблон.
+- **Backtest:** 54 цикла (27 дат × 2 турбины), все успешны, все отчёты LLM прошли самопроверку.
+- **Метрики:** `/api/metrics` — отложенный тест ML за январь (`GET /v1/evaluation`) + SCADA для бейзлайна persistence.
+- **Чат:** `POST /api/agent/chat`, инструменты `getForecast`, `getForecastRevisions`, `getWeather`, `getMetrics`, `listTurbines`.
+  Всё, что видит агент, — готовые выводы по местному времени, без сырых UTC-меток.
+- **Погода для агента:** `backend/.../weather/`, Open-Meteo Single Runs (ECMWF IFS HRES), прогон ≤ момента прогноза.
+- **Запуск:** `docker compose up --build` проверен (ml + backend + frontend, Ollama нативная через `OLLAMA_BASE_URL`).
+- План и статусы — `docs/roadmap.md`.
 
 ## Команды
 
 ```bash
-# LLM (macOS — нативно, использует GPU)
-brew install ollama && ollama serve        # в отдельном терминале
-ollama pull qwen3:8b
-# или в Docker (только CPU на macOS)
-docker compose up -d
+# Всё в Docker
+docker compose up --build                  # UI :3000, API :8080, ML :8000, Ollama :11434
+docker compose up --build ml backend frontend   # без LLM
 
-# Бэкенд
-# ML-сервис (нужен для /api/forecast): Python 3.12+, на macOS ещё `brew install libomp`
-cd ML && pip install -r requirements.txt pyarrow && uvicorn windml.api:app --port 8000
+# Без Docker
+ollama serve & ollama pull qwen3:8b        # LLM (на macOS нативно быстрее — GPU)
+cd ML && pip install -r requirements.txt && uvicorn windml.api:app --port 8000   # macOS: brew install libomp
 cd backend && ./gradlew bootRun            # http://localhost:8080, Swagger: /swagger-ui.html
-python3 scripts/backtest.py                # цикл агента для всех дат × турбин → data/cycles/ (~10 мин с LLM)
-cd backend && ./gradlew test               # тесты (Ollama не нужна)
+cd frontend && npm ci && npm run dev       # http://localhost:5173
+
+python3 scripts/backtest.py [from] [to]    # цикл агента для дат × турбин → data/cycles/ (~10 мин с LLM)
+cd backend && ./gradlew test               # тесты без сети, ML и LLM
+cd ML && python -m pytest tests
 ```
 
 ## Правила, которые нельзя нарушать
 
 1. **Никакой утечки данных из будущего.** Для прогноза в момент `T` используются только данные, опубликованные до `T`:
    архивные *прогнозы* погоды (не фактическая погода / reanalysis), выпущенные ≤ `T` с учётом задержки публикации.
-   Каждый прогноз хранит `weatherIssuedAt ≤ forecastIssuedAt`. Модель обучается только на данных ≤ 2026-01-31.
-2. **Все времена в API и коде — UTC** (`Instant`, ISO-8601 с `Z`). Конвертация в местное время (Казахстан, UTC+5) — только на фронте при отображении.
+   Каждый прогноз хранит `weatherIssuedAt ≤ forecastIssuedAt`; бэкенд отказывается отдавать прогноз, если это не так.
+   Модель обучается только на данных ≤ 2026-01-31; настройки подбираются на валидации до января.
+2. **Все времена в API и коде — UTC** (`Instant`, ISO-8601 с `Z`). Местное время (Asia/Almaty, UTC+5) — только для
+   отображения на фронте и во фразах для LLM.
 3. **Contract-first.** Меняешь API → сначала `openapi.yaml` (или `contracts/ml-service.openapi.yaml`), потом код и тесты.
    Новые поля добавлять как необязательные (nullable), чтобы не ломать других участников.
 4. **Мощность нормализована 0..1** (1 = номинал турбины), не МВт.
 5. **Секреты не коммитить.** Ключи NVIDIA/OpenAI, выданные на хакатоне, — только в локальном `.env` (в `.gitignore`).
-   Всё остальное (модели, конфиги, кэш погоды) можно и нужно коммитить — жюри должно запустить проект без ключей.
+   Всё остальное (модели, кэши, датасет, результаты backtest) коммитится — жюри запускает проект без ключей и сети.
 6. **Воспроизводимость важнее красоты**: 25 из 100 баллов — README и воспроизводимость.
+7. После новой модели ML — перезапустить `scripts/backtest.py` и закоммитить `data/cycles/`.
 
 ## Стиль кода
 
-- Kotlin: как в существующем коде — data-классы DTO в `dto/Dto.kt`, комментарии на русском, короткие и только про «почему».
+- Kotlin: как в существующем коде — DTO в `dto/Dto.kt`, комментарии на русском, короткие и только про «почему».
 - Названия enum-значений в API — `snake_case` (`storm_cutout`), поля JSON — `camelCase`.
-- Тесты — MockMvc + `kotlin.test`, по образцу `WesControllerTests.kt`. Тесты не должны требовать Ollama или сеть.
+- Тесты — MockMvc + `kotlin.test`, по образцу `WesControllerTests.kt`. Тесты не должны требовать Ollama или сеть:
+  ML подменяется записанными ответами (`support/FixtureMl.kt`), погода — офлайн.
 - Коммиты: префикс `ADD:` / `FIX:` / `UPD:` + кратко на английском.
 
 ## Известные грабли
 
-- Ollama по умолчанию даёт ~2k токенов контекста и **молча обрезает промпт** → агент отвечает мусором/по-английски.
-  Уже выставлено `spring.ai.ollama.chat.num-ctx: 16384`; инструменты агента должны возвращать компактные данные (см. `AgentForecastView`).
-- Spring AI по умолчанию делает 10 ретраев с растущей паузой → без Ollama запрос висит минутами. Ограничено `spring.ai.retry.max-attempts: 2`.
-- LLM плохо считает (среднее, суммы по 48 точкам) — итоги всегда отдавать готовыми (`summary`), а не просить модель посчитать.
-- Малая LLM (8B) путается в выводах и в том, к какому дню относятся часы. Инструменты должны: принимать ровно то,
-  о чём спрашивают (календарные дни, а не «момент + горизонт»), отдавать готовые выводы текстом (`conclusions`),
-  почасовые данные — только по запросу. Проверять ответы агента на живой модели по 2+ раза и сверять с API.
-- Проект на Spring Boot 4 / Jackson 3: пакет `tools.jackson.*`, а не `com.fasterxml.jackson.*`.
-- Swagger UI показывает статический `openapi.yaml`, а не сгенерированный из кода — новый эндпоинт надо дописать туда руками.
+- Ollama по умолчанию даёт ~2k токенов контекста и **молча обрезает промпт**. Выставлено `num-ctx: 16384`.
+- qwen3:8b изредка **зацикливается** и генерирует тысячи токенов; Ollama не прерывает генерацию при отключении клиента.
+  Выставлено `num-predict: 1024`.
+- Spring AI по умолчанию делает 10 ретраев с растущей паузой → без Ollama запрос висит минутами. Ограничено `retry.max-attempts: 2`.
+- Малая LLM плохо считает и путается во времени и днях. Инструменты агента: принимают то, о чём спрашивают
+  (календарные дни), отдают готовые выводы текстом (`conclusions`) в местном времени, без сырых UTC-меток
+  (модель подписывала их как местные), почасовые данные — только по запросу. Проверять на живой модели по 2+ раза.
+- Пример с конкретными числами в промпте LLM копирует в ответ — в примерах только плейсхолдеры.
+- Jackson `SnakeCaseStrategy`: `windSpeed100m` → `wind_speed100m`; для полей с цифрами — явный `@JsonProperty`.
+- Spring Boot 4 / Jackson 3: пакет `tools.jackson.*`, а не `com.fasterxml.jackson.*` (аннотации — по-прежнему `com.fasterxml`).
+- Swagger UI показывает статический `openapi.yaml`, а не сгенерированный из кода — новый эндпоинт дописывать туда руками.
 
 ## Открытые вопросы
 
-См. раздел «Открытые вопросы» в `docs/roadmap.md` (часовой пояс исходных данных, где лежит датасет и т.д.).
-Если задача упирается в один из них — спроси человека, не угадывай.
+См. «Открытые вопросы» в `docs/roadmap.md`. Если задача упирается в один из них — спроси человека, не угадывай.
