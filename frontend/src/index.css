@@ -1,0 +1,60 @@
+:root {
+  color-scheme: light;
+
+  /* BMW corporate palette — see DESIGN.md */
+  --primary: #1c69d4;
+  --primary-active: #0653b6;
+  --primary-disabled: #d6d6d6;
+  --ink: #262626;
+  --body-color: #3c3c3c;
+  --muted: #6b6b6b;
+  --muted-soft: #9a9a9a;
+  --hairline: #e6e6e6;
+  --hairline-strong: #cccccc;
+  --canvas: #ffffff;
+  --surface-soft: #f7f7f7;
+  --surface-card: #fafafa;
+  --on-primary: #ffffff;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --warning-ink: #92600c;
+  --error: #dc2626;
+
+  --font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  font-family: var(--font);
+  font-weight: 300;
+  font-size: 16px;
+  line-height: 1.55;
+  letter-spacing: 0;
+  color: var(--body-color);
+  background: var(--canvas);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font);
+  font-weight: 700;
+  letter-spacing: 0;
+  margin: 0;
+  color: var(--ink);
+}
+
+button,
+select,
+input {
+  font-family: var(--font);
+}
