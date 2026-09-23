@@ -1,0 +1,13 @@
+.devdeps
+.venv
+venv
+.maven
+.idea
+.pytest_cache
+**/__pycache__
+**/*.pyc
+spring-agent
+outputs/training/**/previous_models
+outputs/pytest_tmp*
+*.log
+Dataset*.csv

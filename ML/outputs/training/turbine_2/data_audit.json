@@ -1,5 +1,5 @@
 {
-  "source_csv": "C:\\Users\\bolat\\Desktop\\wind_forecast_ml\\data\\raw\\turbine_2.csv",
+  "source_csv": "data/raw/turbine_2.csv",
   "sha256": "820578cd18bb557cd30c2e102f3ae5a386dfc6c489a5a15743339c2b017305e5",
   "raw_rows": 149499,
   "duplicate_timestamps": 0,
@@ -14,12 +14,16 @@
     "2023-03-11 00:00:00",
     "2026-01-31 23:50:00"
   ],
-  "hourly_rows": 24919,
+  "hourly_rows": 24917,
   "anomaly_hours": 103,
-  "weather_site": "turbine_1",
+  "weather_site": "turbine_2",
+  "weather_site_assumption": null,
+  "weather_cache_site": "turbine_1",
+  "scada_tz": "Etc/GMT-5",
+  "local_tz": "Asia/Almaty",
   "weather_coordinates": [
-    43.64515,
-    78.535604
+    43.643198,
+    78.538828
   ],
   "weather_source": "open-meteo-previous-runs",
   "weather_rows_available": 35602,
@@ -27,7 +31,7 @@
   "versions": {
     "python": "3.14.5",
     "pandas": "3.0.3",
-    "numpy": "2.5.1",
+    "numpy": "2.5.3",
     "lightgbm": "4.7.0",
     "scikit_learn": "1.9.1"
   },
@@ -44,6 +48,5 @@
     "random_state": 42,
     "deterministic": true,
     "force_col_wise": true
-  },
-  "weather_site_assumption": "Unconfirmed shared weather location: turbine_2 uses turbine_1 forecasts; confirm location before operational use."
+  }
 }

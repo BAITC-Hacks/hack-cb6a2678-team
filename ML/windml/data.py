@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import pandas as pd
 
-from .config import SITES
+from .config import SITES, LOCAL_TZ
+from . import config
 
 COLS = ["id", "time", "ws_obs", "power", "temp_obs"]
 
@@ -38,7 +39,13 @@ def flag_anomalies(h: pd.DataFrame) -> pd.Series:
     return (h["power"] < 0.02) & (h["ws_obs"] > 6.0)
 
 
-def load_hourly(site: str = "turbine_1", path=None) -> pd.DataFrame:
-    h = to_hourly(load_scada(site, path))
+def load_hourly(site: str = "turbine_1", path=None, scada_tz=None) -> pd.DataFrame:
+    df = load_scada(site, path)
+    # Сначала UTC: переход официального времени не сдвигает приборные часы.
+    df["time"] = df.time.dt.tz_localize(scada_tz or config.SCADA_TZ,
+                                        ambiguous="NaT", nonexistent="NaT").dt.tz_convert("UTC")
+    h = to_hourly(df.dropna(subset=["time"]))
+    h.index = h.index.tz_convert(LOCAL_TZ).tz_localize(None)
+    h = h[~h.index.duplicated(keep=False)]
     h["anomaly"] = flag_anomalies(h)
     return h

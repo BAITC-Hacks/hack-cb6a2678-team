@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -26,7 +27,7 @@ import numpy as np
 import pandas as pd
 import requests
 
-from .config import CFG, LOCAL_TZ, SITES, lead_to_previous_day
+from .config import CFG, LOCAL_TZ, SITES, WEATHER_CACHE_SITES, lead_to_previous_day
 
 log = logging.getLogger(__name__)
 
@@ -39,6 +40,8 @@ class WeatherUnavailable(RuntimeError):
 
 
 def _get_json(url: str, params: dict) -> dict:
+    if os.environ.get("WINDML_OFFLINE") == "1":
+        raise WeatherUnavailable("Weather is not cached and WINDML_OFFLINE=1")
     last = None
     for attempt in range(CFG.http_retries):
         try:
@@ -99,7 +102,8 @@ class PreviousRunsProvider:
             nxt = (pd.Timestamp(cur) + pd.offsets.MonthBegin(1)).date()
             c_end = min(nxt - timedelta(days=1), end)
             complete = c_end < (datetime.now(timezone.utc).date() - timedelta(days=1))
-            key = f"prev_{self.site.name}_{model}_{cur:%Y%m}_{'-'.join(map(str, pdays))}.csv"
+            cache_site = WEATHER_CACHE_SITES.get(self.site.name, self.site.name) if model in CFG.nwp_models else self.site.name
+            key = f"prev_{cache_site}_{model}_{cur:%Y%m}_{'-'.join(map(str, pdays))}.csv"
             fp = self.cache_dir / key
             if fp.exists() and complete:
                 df = pd.read_csv(fp, index_col=0, parse_dates=True)
@@ -235,6 +239,14 @@ def fetch_issue_weather(issue_date, provider=None, models=None, horizon_days=Non
     pd_map = (lambda ld: 0) if live else (lambda ld: lead_to_previous_day(ld, mode))
     pdays = tuple(sorted({pd_map(int(l)) for l in np.unique(lead)}))
     t_utc = idx.tz_localize(LOCAL_TZ, ambiguous="NaT", nonexistent="NaT").tz_convert("UTC")
+    issued = (pd.Timestamp(issue_date).normalize() + pd.Timedelta(hours=CFG.issue_hour)).tz_localize(LOCAL_TZ).tz_convert("UTC")
+    # Previous Runs задаёт фиксированную заблаговременность, не точный ID запуска.
+    # Поэтому это верхняя граница выпуска, а не выдуманная метка конкретного run.
+    bound = max(t - pd.Timedelta(days=pd_map(int(ld))) for t, ld in zip(t_utc, lead)) if not live else None
+    if bound is not None and bound > issued:
+        raise WeatherUnavailable("Weather issuance bound exceeds the forecast issue time")
+    if live and pd.Timestamp.now(tz="UTC") > issued:
+        raise WeatherUnavailable("Live weather cannot prove availability at the requested issue time")
     start, end = t_utc.min().date(), t_utc.max().date()
     raw, errors = {}, {}
     for m in models:
@@ -244,13 +256,18 @@ def fetch_issue_weather(issue_date, provider=None, models=None, horizon_days=Non
             errors[m] = str(e)[:200]
     if not raw:
         raise WeatherUnavailable(f"no NWP model available: {errors}")
+    if live:
+        bound = pd.Timestamp.now(tz="UTC")
+        if bound > issued:
+            raise WeatherUnavailable("Live weather cannot prove availability at the requested issue time")
     nwp = select_leads(raw, idx, lead, pd_map)
     nwp.insert(0, "lead_day", lead)
     meta = {
         "issue_date": str(pd.Timestamp(issue_date).date()),
         "issue_time_local": f"{pd.Timestamp(issue_date).date()} {CFG.issue_hour:02d}:00",
         "source": provider.name,
-        "leakage_mode": "live" if live else (mode or CFG.leakage_mode),
+        "leakage_mode": mode or CFG.leakage_mode,
+        "weather_issued_before_utc": bound.isoformat(timespec="seconds").replace("+00:00", "Z"),
         "previous_days_used": {int(l): pd_map(int(l)) for l in np.unique(lead)},
         "models_ok": list(raw), "models_failed": errors,
         "target_start": str(idx.min()), "target_end": str(idx.max()),

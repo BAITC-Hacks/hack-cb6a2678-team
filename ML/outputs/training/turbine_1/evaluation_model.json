@@ -1,60 +1,11 @@
 {
-  "validation": {
-    "method": "temporal holdout used for early stopping; preprocessing fit on training partition only",
-    "period": [
-      "2025-11-02",
-      "2025-12-31"
-    ],
-    "model": {
-      "n": 2876,
-      "nMAE_%": 18.54,
-      "nRMSE_%": 23.64,
-      "bias_%": 3.11,
-      "corr": 0.786,
-      "coverage_10_90_%": 75.8,
-      "pinball_avg": 0.0509
-    },
-    "baseline_power_curve": {
-      "n": 2876,
-      "nMAE_%": 18.94,
-      "nRMSE_%": 28.54,
-      "bias_%": 7.81,
-      "corr": 0.746
-    },
-    "baseline_climatology": {
-      "n": 2876,
-      "nMAE_%": 33.73,
-      "nRMSE_%": 38.19,
-      "bias_%": -4.95,
-      "corr": null
-    },
-    "by_lead_day": {
-      "1": {
-        "n": 1438,
-        "nMAE_%": 17.9,
-        "nRMSE_%": 22.87,
-        "bias_%": 2.79,
-        "corr": 0.801,
-        "coverage_10_90_%": 76.0,
-        "pinball_avg": 0.0494
-      },
-      "2": {
-        "n": 1438,
-        "nMAE_%": 19.19,
-        "nRMSE_%": 24.39,
-        "bias_%": 3.42,
-        "corr": 0.771,
-        "coverage_10_90_%": 75.5,
-        "pinball_avg": 0.0525
-      }
-    }
-  },
   "version": "1.0.0",
-  "trained_at": "2026-09-23T10:56:52+00:00",
+  "trained_at": "2026-09-23T11:59:41+00:00",
   "train_period": [
     "2024-01-20",
     "2025-12-31"
   ],
+  "trained_until_utc": "2025-12-31T18:00:00Z",
   "n_train_rows": 30734,
   "n_anomalies_dropped": 112,
   "nwp_models": [
@@ -64,23 +15,12 @@
   ],
   "leakage_mode": "strict",
   "best_iterations": {
-    "mean": 100,
-    "p10": 100,
-    "p50": 196,
-    "p90": 338
+    "mean": 595,
+    "p10": 489,
+    "p50": 770,
+    "p90": 165
   },
-  "top_features": {
-    "ens_ws_roll6": 0.569,
-    "ens_ws_roll3": 0.193,
-    "ecmwf_ifs025_ws10": 0.025,
-    "doy_sin": 0.023,
-    "doy_cos": 0.021,
-    "gfs_seamless_wd_sin": 0.015,
-    "pc_qm_smooth": 0.013,
-    "ens_ws_min": 0.011,
-    "rho": 0.01,
-    "icon_seamless_shear": 0.009
-  },
+  "iteration_selection": "frozen from model fitted before 2025-11-01; no January tuning",
   "power_curve": {
     "ws": [
       0.42,
@@ -149,6 +89,18 @@
       0.99
     ]
   },
+  "top_features": {
+    "ens_ws_roll6": 0.476,
+    "ens_ws_roll3": 0.135,
+    "doy_sin": 0.048,
+    "doy_cos": 0.042,
+    "ecmwf_ifs025_ws10": 0.024,
+    "rho": 0.019,
+    "rh": 0.018,
+    "gfs_seamless_wd_sin": 0.017,
+    "pc_qm_smooth": 0.014,
+    "temp": 0.014
+  },
   "ws_train_range": [
     0.47000000000000003,
     21.536666666666672
@@ -156,7 +108,7 @@
   "site": "turbine_1",
   "weather_source": "open-meteo-previous-runs",
   "data": {
-    "source_csv": "C:\\Users\\bolat\\Desktop\\wind_forecast_ml\\data\\raw\\turbine_1.csv",
+    "source_csv": "data/raw/turbine_1.csv",
     "sha256": "c4c341582fb2dd348b7187f0128cff265fe055f469413871ebb5db50eef58b5b",
     "raw_rows": 142360,
     "duplicate_timestamps": 0,
@@ -171,9 +123,13 @@
       "2023-03-11 00:00:00",
       "2026-01-31 23:50:00"
     ],
-    "hourly_rows": 23728,
+    "hourly_rows": 23726,
     "anomaly_hours": 149,
     "weather_site": "turbine_1",
+    "weather_site_assumption": null,
+    "weather_cache_site": "turbine_1",
+    "scada_tz": "Etc/GMT-5",
+    "local_tz": "Asia/Almaty",
     "weather_coordinates": [
       43.64515,
       78.535604
@@ -184,7 +140,7 @@
     "versions": {
       "python": "3.14.5",
       "pandas": "3.0.3",
-      "numpy": "2.5.1",
+      "numpy": "2.5.3",
       "lightgbm": "4.7.0",
       "scikit_learn": "1.9.1"
     },
@@ -203,6 +159,100 @@
       "force_col_wise": true
     }
   },
+  "scada_tz": "Etc/GMT-5",
+  "local_tz": "Asia/Almaty",
+  "calibration": {
+    "by_lead_day": {
+      "1": {
+        "scale": 1.0392966198266622,
+        "offset": -0.04166935036820672,
+        "interval_padding": 0.0028906957916717824
+      },
+      "2": {
+        "scale": 1.044890736761343,
+        "offset": -0.06377120046567272,
+        "interval_padding": 0.019455116405557193
+      }
+    },
+    "method": "affine",
+    "fit_period": [
+      "2025-11-01 00:00:00",
+      "2025-11-30 23:00:00"
+    ],
+    "selection_period": [
+      "2025-12-01 00:00:00",
+      "2025-12-31 23:00:00"
+    ],
+    "candidate_metrics": {
+      "none": {
+        "n": 1484,
+        "nMAE_%": 19.61,
+        "nRMSE_%": 26.29,
+        "bias_%": 5.24,
+        "corr": 0.744,
+        "coverage_10_90_%": 67.3,
+        "pinball_avg": 0.0593
+      },
+      "additive": {
+        "n": 1484,
+        "nMAE_%": 19.23,
+        "nRMSE_%": 25.82,
+        "bias_%": 1.84,
+        "corr": 0.744,
+        "coverage_10_90_%": 64.2,
+        "pinball_avg": 0.0601
+      },
+      "scale": {
+        "n": 1484,
+        "nMAE_%": 19.67,
+        "nRMSE_%": 25.84,
+        "bias_%": 3.25,
+        "corr": 0.744,
+        "coverage_10_90_%": 55.7,
+        "pinball_avg": 0.0607
+      },
+      "affine": {
+        "n": 1484,
+        "nMAE_%": 18.97,
+        "nRMSE_%": 26.03,
+        "bias_%": 2.13,
+        "corr": 0.745,
+        "coverage_10_90_%": 70.6,
+        "pinball_avg": 0.059
+      }
+    },
+    "interval_method": "per-lead split residual quantile, nominal 80%; December 2025 only",
+    "interval_period": [
+      "2025-12-01 00:00:00",
+      "2025-12-31 23:00:00"
+    ]
+  },
+  "warning_calibration": {
+    "thresholds": {
+      "HIGH_NWP_DISAGREEMENT": 5.78972724635072,
+      "WIDE_INTERVAL": 0.630506293182253,
+      "ML_VS_PHYSICS_GAP": 0.19267171955780213
+    },
+    "quantiles": [
+      0.9,
+      0.9,
+      0.95
+    ],
+    "period": [
+      "2025-11-01 00:00:00",
+      "2025-12-31 23:00:00"
+    ],
+    "n_issues": 58,
+    "validation_issue_rates": {
+      "HIGH_NWP_DISAGREEMENT": 0.10344827586206896,
+      "WIDE_INTERVAL": 0.10344827586206896,
+      "ML_VS_PHYSICS_GAP": 0.05172413793103448
+    }
+  },
+  "selection_model_train_period": [
+    "2024-01-20",
+    "2025-10-31"
+  ],
   "test": {
     "method": "untouched chronological test; no test labels used for fitting or early stopping",
     "period": [
@@ -215,31 +265,31 @@
     ],
     "model": {
       "n": 1488,
-      "nMAE_%": 19.99,
-      "nRMSE_%": 25.35,
-      "bias_%": 9.65,
-      "corr": 0.723,
-      "coverage_10_90_%": 70.0,
-      "pinball_avg": 0.0568
+      "nMAE_%": 17.55,
+      "nRMSE_%": 23.73,
+      "bias_%": 4.82,
+      "corr": 0.736,
+      "coverage_10_90_%": 83.1,
+      "pinball_avg": 0.056
     },
     "by_lead_day": {
       "1": {
         "n": 744,
-        "nMAE_%": 19.59,
-        "nRMSE_%": 25.05,
-        "bias_%": 9.73,
-        "corr": 0.732,
-        "coverage_10_90_%": 70.3,
-        "pinball_avg": 0.0553
+        "nMAE_%": 17.34,
+        "nRMSE_%": 23.55,
+        "bias_%": 5.99,
+        "corr": 0.747,
+        "coverage_10_90_%": 83.9,
+        "pinball_avg": 0.0555
       },
       "2": {
         "n": 744,
-        "nMAE_%": 20.4,
-        "nRMSE_%": 25.65,
-        "bias_%": 9.57,
-        "corr": 0.713,
-        "coverage_10_90_%": 69.6,
-        "pinball_avg": 0.0583
+        "nMAE_%": 17.76,
+        "nRMSE_%": 23.9,
+        "bias_%": 3.64,
+        "corr": 0.726,
+        "coverage_10_90_%": 82.4,
+        "pinball_avg": 0.0565
       }
     },
     "baseline_power_curve": {
@@ -254,7 +304,63 @@
       "nMAE_%": 30.3,
       "nRMSE_%": 34.25,
       "bias_%": 5.96,
-      "corr": null
+      "corr": -0.0
+    },
+    "climatology_value": 0.3755826451654854,
+    "baselines_by_lead_day": {
+      "1": {
+        "power_curve": {
+          "n": 744,
+          "nMAE_%": 24.23,
+          "nRMSE_%": 35.1,
+          "bias_%": 18.25,
+          "corr": 0.664
+        },
+        "climatology": {
+          "n": 744,
+          "nMAE_%": 30.3,
+          "nRMSE_%": 34.25,
+          "bias_%": 5.96,
+          "corr": -0.0
+        }
+      },
+      "2": {
+        "power_curve": {
+          "n": 744,
+          "nMAE_%": 25.57,
+          "nRMSE_%": 36.19,
+          "bias_%": 18.36,
+          "corr": 0.639
+        },
+        "climatology": {
+          "n": 744,
+          "nMAE_%": 30.3,
+          "nRMSE_%": 34.25,
+          "bias_%": 5.96,
+          "corr": -0.0
+        }
+      }
+    },
+    "bias_diagnosis": {
+      "anomaly_share": 0.004032258064516129,
+      "normal_hours": {
+        "n": 1482,
+        "nMAE_%": 17.54,
+        "nRMSE_%": 23.73,
+        "bias_%": 4.76,
+        "corr": 0.736,
+        "coverage_10_90_%": 83.1,
+        "pinball_avg": 0.0561
+      },
+      "anomaly_hours": {
+        "n": 6,
+        "nMAE_%": 19.93,
+        "nRMSE_%": 21.31,
+        "bias_%": 19.93,
+        "corr": null,
+        "coverage_10_90_%": 100.0,
+        "pinball_avg": 0.0388
+      }
     },
     "includes_anomalies": true,
     "unique_hours_scored": 744

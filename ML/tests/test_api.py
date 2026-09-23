@@ -56,7 +56,8 @@ def test_trained_model_forecast(client, site):
     assert info["weather_source"] != "mock"
     assert info["test_before_final_refit"]["evaluation_model_train_period"][1] < "2026-01-01"
     if site == "turbine_2":
-        assert data["weather_site_assumption"]
+        assert data["weather_site"] == "turbine_2"
+        assert data["weather_site_assumption"] is None
 
 
 @pytest.mark.parametrize("error", [FileNotFoundError(), WeatherUnavailable("missing forecasts")])

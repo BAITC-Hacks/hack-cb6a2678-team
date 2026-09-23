@@ -17,14 +17,18 @@ class Site:
 
 
 # Координаты турбины 1 — из ссылки в ТЗ (maps.app.goo.gl/iN6svMt69D5qRpFU9 → 43.645150, 78.535604).
-# Турбину 2 добавьте по аналогии, когда появятся её данные.
 SITES: dict[str, Site] = {
     "turbine_1": Site("turbine_1", 43.645150, 78.535604, ROOT / "data/raw/turbine_1.csv"),
+    "turbine_2": Site("turbine_2", 43.643198, 78.538828, ROOT / "data/raw/turbine_2.csv"),
 }
 
 # Время в SCADA — местное (минимум температуры ~06:00, максимум ~15:00).
 # Asia/Almaty учитывает переход Казахстана с UTC+6 на UTC+5 (01.03.2024).
 LOCAL_TZ = "Asia/Almaty"
+# Отдельный пояс приборных часов; выбирается на валидации до января.
+SCADA_TZ = "Etc/GMT-5"
+# Все переменные трёх моделей совпали: outputs/selection/weather_site_comparison.json.
+WEATHER_CACHE_SITES = {"turbine_2": "turbine_1"}
 
 
 @dataclass

@@ -1,0 +1,310 @@
+{
+  "metrics": [
+    {
+      "site": "turbine_1",
+      "lead_day": 1,
+      "stage": "до",
+      "model": {
+        "n": 744,
+        "nMAE_%": 19.59,
+        "nRMSE_%": 25.05,
+        "bias_%": 9.73,
+        "corr": 0.732,
+        "coverage_10_90_%": 70.3,
+        "pinball_avg": 0.0553
+      },
+      "power_curve": {
+        "n": 744,
+        "nMAE_%": 24.23,
+        "nRMSE_%": 35.1,
+        "bias_%": 18.25,
+        "corr": 0.664
+      },
+      "climatology": {
+        "n": 744,
+        "nMAE_%": 30.3,
+        "nRMSE_%": 34.25,
+        "bias_%": 5.96,
+        "corr": null
+      }
+    },
+    {
+      "site": "turbine_1",
+      "lead_day": 2,
+      "stage": "до",
+      "model": {
+        "n": 744,
+        "nMAE_%": 20.4,
+        "nRMSE_%": 25.65,
+        "bias_%": 9.57,
+        "corr": 0.713,
+        "coverage_10_90_%": 69.6,
+        "pinball_avg": 0.0583
+      },
+      "power_curve": {
+        "n": 744,
+        "nMAE_%": 25.57,
+        "nRMSE_%": 36.19,
+        "bias_%": 18.36,
+        "corr": 0.639
+      },
+      "climatology": {
+        "n": 744,
+        "nMAE_%": 30.3,
+        "nRMSE_%": 34.25,
+        "bias_%": 5.96,
+        "corr": null
+      }
+    },
+    {
+      "site": "turbine_1",
+      "lead_day": 1,
+      "stage": "после",
+      "model": {
+        "n": 744,
+        "nMAE_%": 17.34,
+        "nRMSE_%": 23.55,
+        "bias_%": 5.99,
+        "corr": 0.747,
+        "coverage_10_90_%": 83.9,
+        "pinball_avg": 0.0555
+      },
+      "power_curve": {
+        "n": 744,
+        "nMAE_%": 24.23,
+        "nRMSE_%": 35.1,
+        "bias_%": 18.25,
+        "corr": 0.664
+      },
+      "climatology": {
+        "n": 744,
+        "nMAE_%": 30.3,
+        "nRMSE_%": 34.25,
+        "bias_%": 5.96,
+        "corr": -0.0
+      }
+    },
+    {
+      "site": "turbine_1",
+      "lead_day": 2,
+      "stage": "после",
+      "model": {
+        "n": 744,
+        "nMAE_%": 17.76,
+        "nRMSE_%": 23.9,
+        "bias_%": 3.64,
+        "corr": 0.726,
+        "coverage_10_90_%": 82.4,
+        "pinball_avg": 0.0565
+      },
+      "power_curve": {
+        "n": 744,
+        "nMAE_%": 25.57,
+        "nRMSE_%": 36.19,
+        "bias_%": 18.36,
+        "corr": 0.639
+      },
+      "climatology": {
+        "n": 744,
+        "nMAE_%": 30.3,
+        "nRMSE_%": 34.25,
+        "bias_%": 5.96,
+        "corr": -0.0
+      }
+    },
+    {
+      "site": "turbine_2",
+      "lead_day": 1,
+      "stage": "до",
+      "model": {
+        "n": 744,
+        "nMAE_%": 19.76,
+        "nRMSE_%": 25.54,
+        "bias_%": 9.88,
+        "corr": 0.721,
+        "coverage_10_90_%": 69.0,
+        "pinball_avg": 0.056
+      },
+      "power_curve": {
+        "n": 744,
+        "nMAE_%": 24.95,
+        "nRMSE_%": 36.01,
+        "bias_%": 18.55,
+        "corr": 0.64
+      },
+      "climatology": {
+        "n": 744,
+        "nMAE_%": 30.25,
+        "nRMSE_%": 34.19,
+        "bias_%": 5.4,
+        "corr": null
+      }
+    },
+    {
+      "site": "turbine_2",
+      "lead_day": 2,
+      "stage": "до",
+      "model": {
+        "n": 744,
+        "nMAE_%": 20.61,
+        "nRMSE_%": 26.18,
+        "bias_%": 9.88,
+        "corr": 0.702,
+        "coverage_10_90_%": 67.7,
+        "pinball_avg": 0.0582
+      },
+      "power_curve": {
+        "n": 744,
+        "nMAE_%": 26.19,
+        "nRMSE_%": 37.04,
+        "bias_%": 18.65,
+        "corr": 0.615
+      },
+      "climatology": {
+        "n": 744,
+        "nMAE_%": 30.25,
+        "nRMSE_%": 34.19,
+        "bias_%": 5.4,
+        "corr": null
+      }
+    },
+    {
+      "site": "turbine_2",
+      "lead_day": 1,
+      "stage": "после",
+      "model": {
+        "n": 744,
+        "nMAE_%": 18.16,
+        "nRMSE_%": 24.81,
+        "bias_%": 7.57,
+        "corr": 0.728,
+        "coverage_10_90_%": 82.5,
+        "pinball_avg": 0.0557
+      },
+      "power_curve": {
+        "n": 744,
+        "nMAE_%": 24.95,
+        "nRMSE_%": 36.01,
+        "bias_%": 18.55,
+        "corr": 0.64
+      },
+      "climatology": {
+        "n": 744,
+        "nMAE_%": 30.25,
+        "nRMSE_%": 34.19,
+        "bias_%": 5.4,
+        "corr": null
+      }
+    },
+    {
+      "site": "turbine_2",
+      "lead_day": 2,
+      "stage": "после",
+      "model": {
+        "n": 744,
+        "nMAE_%": 18.53,
+        "nRMSE_%": 24.98,
+        "bias_%": 5.54,
+        "corr": 0.709,
+        "coverage_10_90_%": 76.7,
+        "pinball_avg": 0.0566
+      },
+      "power_curve": {
+        "n": 744,
+        "nMAE_%": 26.19,
+        "nRMSE_%": 37.04,
+        "bias_%": 18.64,
+        "corr": 0.615
+      },
+      "climatology": {
+        "n": 744,
+        "nMAE_%": 30.25,
+        "nRMSE_%": 34.19,
+        "bias_%": 5.4,
+        "corr": null
+      }
+    }
+  ],
+  "february": {
+    "turbine_1": {
+      "issues": 27,
+      "status_counts": {
+        "warning": 19,
+        "ok": 8
+      },
+      "warning_rate": 0.7037037037037037,
+      "code_counts": {
+        "ML_VS_PHYSICS_GAP": 10,
+        "WIDE_INTERVAL": 10,
+        "HIGH_NWP_DISAGREEMENT": 9
+      },
+      "thresholds": {
+        "HIGH_NWP_DISAGREEMENT": 5.78972724635072,
+        "WIDE_INTERVAL": 0.630506293182253,
+        "ML_VS_PHYSICS_GAP": 0.19267171955780213
+      }
+    },
+    "turbine_2": {
+      "issues": 27,
+      "status_counts": {
+        "ok": 11,
+        "warning": 16
+      },
+      "warning_rate": 0.5925925925925926,
+      "code_counts": {
+        "HIGH_NWP_DISAGREEMENT": 9,
+        "WIDE_INTERVAL": 10,
+        "ML_VS_PHYSICS_GAP": 6
+      },
+      "thresholds": {
+        "HIGH_NWP_DISAGREEMENT": 5.783518140363789,
+        "WIDE_INTERVAL": 0.6166413710691111,
+        "ML_VS_PHYSICS_GAP": 0.20372491269768975
+      }
+    }
+  },
+  "bias_diagnosis": {
+    "turbine_1": {
+      "anomaly_share": 0.004032258064516129,
+      "normal_hours": {
+        "n": 1482,
+        "nMAE_%": 17.54,
+        "nRMSE_%": 23.73,
+        "bias_%": 4.76,
+        "corr": 0.736,
+        "coverage_10_90_%": 83.1,
+        "pinball_avg": 0.0561
+      },
+      "anomaly_hours": {
+        "n": 6,
+        "nMAE_%": 19.93,
+        "nRMSE_%": 21.31,
+        "bias_%": 19.93,
+        "corr": null,
+        "coverage_10_90_%": 100.0,
+        "pinball_avg": 0.0388
+      }
+    },
+    "turbine_2": {
+      "anomaly_share": 0.008064516129032258,
+      "normal_hours": {
+        "n": 1476,
+        "nMAE_%": 18.25,
+        "nRMSE_%": 24.8,
+        "bias_%": 6.36,
+        "corr": 0.72,
+        "coverage_10_90_%": 79.6,
+        "pinball_avg": 0.056
+      },
+      "anomaly_hours": {
+        "n": 12,
+        "nMAE_%": 30.06,
+        "nRMSE_%": 34.71,
+        "bias_%": 30.06,
+        "corr": 0.019,
+        "coverage_10_90_%": 83.3,
+        "pinball_avg": 0.0735
+      }
+    }
+  }
+}

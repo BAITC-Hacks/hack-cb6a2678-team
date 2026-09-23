@@ -15,10 +15,10 @@ from fastapi.responses import JSONResponse
 
 from .tools import TOOL_SCHEMAS, call_tool
 from . import service
-from .service import ForecastRequest, ForecastResponse, SiteName
+from .service import EvaluationResponse, ForecastRequest, ForecastResponse, SiteName
 from .weather import WeatherUnavailable
 
-app = FastAPI(title="windml — прогноз выработки ВЭС", version="1.0.0")
+app = FastAPI(title="windml — прогноз выработки ВЭС", version="2.0.0")
 
 
 @app.get("/health")
@@ -35,7 +35,7 @@ def models():
 @app.get("/v1/models/{site}")
 def model_info(site: SiteName):
     try:
-        return {"site": site, **service.get_model(site).meta}
+        return service.model_info(site)
     except FileNotFoundError as exc:
         raise HTTPException(503, "Model has not been trained yet") from exc
 
@@ -54,6 +54,14 @@ def forecast(request: ForecastRequest):
 def list_tools():
     """JSON-схемы всех инструментов (можно отдать LLM как есть)."""
     return TOOL_SCHEMAS
+
+
+@app.get("/v1/evaluation/{site}", response_model=EvaluationResponse)
+def evaluation(site: SiteName):
+    try:
+        return service.evaluation(site)
+    except (FileNotFoundError, ValueError, KeyError, WeatherUnavailable) as exc:
+        raise HTTPException(503, "Evaluation artifacts unavailable or invalid: " + str(exc)) from exc
 
 
 @app.post("/tools/{name}")

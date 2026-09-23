@@ -83,7 +83,7 @@ def test_analysis_flags_errors():
     assert analyze(fc)["status"] == "ok"
     fc.iloc[5, 0] = np.nan
     rep = analyze(fc)
-    assert rep["status"] == "error" and rep["recommended_action"] == "rerun_with_fallback"
+    assert rep["status"] == "critical" and rep["recommended_action"] == "rerun_with_fallback"
 
 
 def test_end_to_end_mock_and_tools(tmp_path, monkeypatch):

@@ -1,0 +1,102 @@
+{
+  "scada_tz": "Etc/GMT-5",
+  "local_tz": "Asia/Almaty",
+  "calibration": {
+    "by_lead_day": {
+      "1": {
+        "scale": 1.0440760741069646,
+        "offset": -0.029153258934472914,
+        "interval_padding": 0.005215533729703098
+      },
+      "2": {
+        "scale": 1.0346214292305718,
+        "offset": -0.04344080136969826,
+        "interval_padding": 0.005359345700630904
+      }
+    },
+    "method": "affine",
+    "fit_period": [
+      "2025-11-01 00:00:00",
+      "2025-11-30 23:00:00"
+    ],
+    "selection_period": [
+      "2025-12-01 00:00:00",
+      "2025-12-31 23:00:00"
+    ],
+    "candidate_metrics": {
+      "none": {
+        "n": 1476,
+        "nMAE_%": 20.1,
+        "nRMSE_%": 26.81,
+        "bias_%": 6.43,
+        "corr": 0.735,
+        "coverage_10_90_%": 70.1,
+        "pinball_avg": 0.0602
+      },
+      "additive": {
+        "n": 1476,
+        "nMAE_%": 19.74,
+        "nRMSE_%": 26.41,
+        "bias_%": 4.43,
+        "corr": 0.735,
+        "coverage_10_90_%": 69.2,
+        "pinball_avg": 0.0596
+      },
+      "scale": {
+        "n": 1476,
+        "nMAE_%": 20.08,
+        "nRMSE_%": 26.55,
+        "bias_%": 5.52,
+        "corr": 0.734,
+        "coverage_10_90_%": 62.6,
+        "pinball_avg": 0.0602
+      },
+      "affine": {
+        "n": 1476,
+        "nMAE_%": 19.58,
+        "nRMSE_%": 26.67,
+        "bias_%": 4.76,
+        "corr": 0.735,
+        "coverage_10_90_%": 78.4,
+        "pinball_avg": 0.0598
+      }
+    },
+    "interval_method": "per-lead split residual quantile, nominal 80%; December 2025 only",
+    "interval_period": [
+      "2025-12-01 00:00:00",
+      "2025-12-31 23:00:00"
+    ]
+  },
+  "warning_calibration": {
+    "thresholds": {
+      "HIGH_NWP_DISAGREEMENT": 5.783518140363789,
+      "WIDE_INTERVAL": 0.6166413710691111,
+      "ML_VS_PHYSICS_GAP": 0.20372491269768975
+    },
+    "quantiles": [
+      0.9,
+      0.9,
+      0.95
+    ],
+    "period": [
+      "2025-11-01 00:00:00",
+      "2025-12-31 23:00:00"
+    ],
+    "n_issues": 56,
+    "validation_issue_rates": {
+      "HIGH_NWP_DISAGREEMENT": 0.10714285714285714,
+      "WIDE_INTERVAL": 0.10714285714285714,
+      "ML_VS_PHYSICS_GAP": 0.05357142857142857
+    }
+  },
+  "selection_model_train_period": [
+    "2024-01-20",
+    "2025-10-31"
+  ],
+  "iterations": {
+    "mean": 559,
+    "p10": 288,
+    "p50": 932,
+    "p90": 237
+  }
+}

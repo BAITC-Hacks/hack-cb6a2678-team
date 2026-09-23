@@ -22,6 +22,8 @@ from .config import CFG
 from .features import build_features
 from .metrics import score
 from .powercurve import EmpiricalPowerCurve, QuantileMapper
+from .calibration import apply_calibration
+from .timeutils import utc_string
 
 log = logging.getLogger(__name__)
 warnings.filterwarnings("ignore", category=FutureWarning, module="lightgbm")
@@ -29,7 +31,8 @@ warnings.filterwarnings("ignore", message=".*eval_set.*")
 
 BASE_PARAMS = dict(learning_rate=0.03, num_leaves=31, min_child_samples=40,
                    feature_fraction=0.8, bagging_fraction=0.8, bagging_freq=1,
-                   lambda_l2=1.0, verbose=-1, n_jobs=-1)
+                   lambda_l2=1.0, verbose=-1, n_jobs=4, random_state=42,
+                   deterministic=True, force_col_wise=True)
 
 
 class WindPowerModel:
@@ -136,6 +139,34 @@ class WindPowerModel:
         for q in self.quantiles:
             yield f"p{int(round(q * 100))}", dict(objective="quantile", alpha=q)
 
+    def fit_frozen(self, nwp_train, scada_hourly, iterations):
+        """Финальный refit с числом деревьев, выбранным до января."""
+        y = scada_hourly.power.reindex(nwp_train.index)
+        anomaly = scada_hourly.anomaly.reindex(nwp_train.index).fillna(False).astype(bool)
+        raw = build_features(nwp_train, self.nwp_models)
+        available = y.notna() & raw.ens_ws_mean.notna()
+        mask = available & (~anomaly if self.drop_anomalies else True)
+        times = nwp_train.index[available].unique()
+        clean = scada_hourly.loc[scada_hourly.index.isin(times) & ~scada_hourly.anomaly]
+        self.pcurve_ = EmpiricalPowerCurve().fit(clean.ws_obs, clean.power)
+        self.qmap_ = QuantileMapper().fit(raw.loc[available, "ens_ws_mean"],
+                                        scada_hourly.ws_obs.reindex(nwp_train.index)[available])
+        X = self._features(nwp_train)[mask]
+        self.features_ = list(X.columns)
+        self.models_ = {name: self._lgb(obj, int(iterations[name])).fit(X, y[mask])
+                        for name, obj in self._objectives()}
+        importance = pd.Series(self.models_["mean"].booster_.feature_importance("gain"), index=self.features_)
+        self.meta.update(version=__version__, trained_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                         train_period=[str(X.index.min().date()), str(X.index.max().date())],
+                         trained_until_utc=utc_string(X.index.max()), n_train_rows=len(X),
+                         n_anomalies_dropped=int((available & anomaly).sum()) if self.drop_anomalies else 0,
+                         nwp_models=self.nwp_models, leakage_mode=CFG.leakage_mode, best_iterations=iterations,
+                         iteration_selection="frozen from model fitted before 2025-11-01; no January tuning",
+                         power_curve=self.pcurve_.to_dict(),
+                         top_features=(importance / importance.sum()).sort_values(ascending=False).head(10).round(3).to_dict(),
+                         ws_train_range=[float(X.ens_ws_mean.min()), float(X.ens_ws_mean.max())])
+        return self
+
     def _lgb(self, obj, n_estimators=3000):
         extra = {}
         if obj.get("objective") == "regression":   # LightGBM не поддерживает monotone для quantile
@@ -149,6 +180,9 @@ class WindPowerModel:
         if qc:
             df[qc] = np.sort(df[qc].to_numpy(), axis=1)  # устраняем пересечение квантилей
         df["forecast"] = df["mean"] if "mean" in df else df.get("p50")
+        if "p10" in df and "p90" in df:
+            df["p10"] = np.minimum(df["p10"], df["forecast"])
+            df["p90"] = np.maximum(df["p90"], df["forecast"])
         return df
 
     # --------------------------------------------------------------- predict
@@ -160,7 +194,10 @@ class WindPowerModel:
         out["pc_baseline"] = X["pc_qm"].to_numpy()
         out["ens_ws_mean"] = X["ens_ws_mean"].to_numpy()
         out["ens_ws_std"] = X["ens_ws_std"].to_numpy()
+        out["temperature_2m"] = X["temp"].to_numpy()
         out["n_models"] = X["n_models"].to_numpy()
+        if self.meta.get("calibration"):
+            out = apply_calibration(out, self.meta["calibration"])
         out.index.name = "time_local"
         return out
 

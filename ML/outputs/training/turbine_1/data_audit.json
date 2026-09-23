@@ -1,5 +1,5 @@
 {
-  "source_csv": "C:\\Users\\bolat\\Desktop\\wind_forecast_ml\\data\\raw\\turbine_1.csv",
+  "source_csv": "data/raw/turbine_1.csv",
   "sha256": "c4c341582fb2dd348b7187f0128cff265fe055f469413871ebb5db50eef58b5b",
   "raw_rows": 142360,
   "duplicate_timestamps": 0,
@@ -14,9 +14,13 @@
     "2023-03-11 00:00:00",
     "2026-01-31 23:50:00"
   ],
-  "hourly_rows": 23728,
+  "hourly_rows": 23726,
   "anomaly_hours": 149,
   "weather_site": "turbine_1",
+  "weather_site_assumption": null,
+  "weather_cache_site": "turbine_1",
+  "scada_tz": "Etc/GMT-5",
+  "local_tz": "Asia/Almaty",
   "weather_coordinates": [
     43.64515,
     78.535604
@@ -27,7 +31,7 @@
   "versions": {
     "python": "3.14.5",
     "pandas": "3.0.3",
-    "numpy": "2.5.1",
+    "numpy": "2.5.3",
     "lightgbm": "4.7.0",
     "scikit_learn": "1.9.1"
   },

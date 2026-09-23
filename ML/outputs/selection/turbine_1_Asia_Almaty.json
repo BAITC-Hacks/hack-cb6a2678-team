@@ -1,0 +1,46 @@
+{
+  "site": "turbine_1",
+  "scada_tz": "Asia/Almaty",
+  "local_tz": "Asia/Almaty",
+  "fit_period": [
+    "2024-01-20",
+    "2025-10-31"
+  ],
+  "validation_period": [
+    "2025-11-01 00:00:00",
+    "2025-12-31 23:00:00"
+  ],
+  "metrics": {
+    "n": 2924,
+    "nMAE_%": 18.11,
+    "nRMSE_%": 24.21,
+    "bias_%": 4.39,
+    "corr": 0.78,
+    "coverage_10_90_%": 68.3,
+    "pinball_avg": 0.0517
+  },
+  "wind_correlation": {
+    "before_transition": 0.7186071305223155,
+    "after_transition": 0.7393660420360352
+  },
+  "by_lead_day": {
+    "1": {
+      "n": 1462,
+      "nMAE_%": 17.52,
+      "nRMSE_%": 23.55,
+      "bias_%": 3.89,
+      "corr": 0.792,
+      "coverage_10_90_%": 69.0,
+      "pinball_avg": 0.0502
+    },
+    "2": {
+      "n": 1462,
+      "nMAE_%": 18.71,
+      "nRMSE_%": 24.86,
+      "bias_%": 4.89,
+      "corr": 0.768,
+      "coverage_10_90_%": 67.5,
+      "pinball_avg": 0.0531
+    }
+  }
+}

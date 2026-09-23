@@ -1,0 +1,395 @@
+{
+  "site": "turbine_2",
+  "model_file": "C:\\Users\\bolat\\Desktop\\wind_forecast_ml\\models\\wind_model_turbine_2.joblib",
+  "data": {
+    "source_csv": "C:\\Users\\bolat\\Desktop\\wind_forecast_ml\\data\\raw\\turbine_2.csv",
+    "sha256": "820578cd18bb557cd30c2e102f3ae5a386dfc6c489a5a15743339c2b017305e5",
+    "raw_rows": 149499,
+    "duplicate_timestamps": 0,
+    "raw_missing_values": {
+      "ID": 0,
+      "Статистическое время": 0,
+      "Средняя скорость ветра(m/s)": 0,
+      "Нормализованная активная мощность": 0,
+      "Средняя температура окружающей среды(°C)": 0
+    },
+    "raw_period": [
+      "2023-03-11 00:00:00",
+      "2026-01-31 23:50:00"
+    ],
+    "hourly_rows": 24919,
+    "anomaly_hours": 103,
+    "weather_site": "turbine_1",
+    "weather_coordinates": [
+      43.64515,
+      78.535604
+    ],
+    "weather_source": "open-meteo-previous-runs",
+    "weather_rows_available": 35602,
+    "weather_first_available": "2024-01-20 18:00:00",
+    "versions": {
+      "python": "3.14.5",
+      "pandas": "3.0.3",
+      "numpy": "2.5.1",
+      "lightgbm": "4.7.0",
+      "scikit_learn": "1.9.1"
+    },
+    "training_parameters": {
+      "learning_rate": 0.03,
+      "num_leaves": 31,
+      "min_child_samples": 40,
+      "feature_fraction": 0.8,
+      "bagging_fraction": 0.8,
+      "bagging_freq": 1,
+      "lambda_l2": 1.0,
+      "verbose": -1,
+      "n_jobs": 4,
+      "random_state": 42,
+      "deterministic": true,
+      "force_col_wise": true
+    },
+    "weather_site_assumption": "Unconfirmed shared weather location: turbine_2 uses turbine_1 forecasts; confirm location before operational use."
+  },
+  "test": {
+    "method": "untouched chronological test; no test labels used for fitting or early stopping",
+    "period": [
+      "2026-01-01",
+      "2026-01-31"
+    ],
+    "evaluation_model_train_period": [
+      "2024-01-20",
+      "2025-12-31"
+    ],
+    "model": {
+      "n": 1488,
+      "nMAE_%": 20.19,
+      "nRMSE_%": 25.86,
+      "bias_%": 9.88,
+      "corr": 0.712,
+      "coverage_10_90_%": 68.3,
+      "pinball_avg": 0.0571
+    },
+    "by_lead_day": {
+      "1": {
+        "n": 744,
+        "nMAE_%": 19.76,
+        "nRMSE_%": 25.54,
+        "bias_%": 9.88,
+        "corr": 0.721,
+        "coverage_10_90_%": 69.0,
+        "pinball_avg": 0.056
+      },
+      "2": {
+        "n": 744,
+        "nMAE_%": 20.61,
+        "nRMSE_%": 26.18,
+        "bias_%": 9.88,
+        "corr": 0.702,
+        "coverage_10_90_%": 67.7,
+        "pinball_avg": 0.0582
+      }
+    },
+    "baseline_power_curve": {
+      "n": 1488,
+      "nMAE_%": 25.57,
+      "nRMSE_%": 36.53,
+      "bias_%": 18.6,
+      "corr": 0.628
+    },
+    "baseline_climatology": {
+      "n": 1488,
+      "nMAE_%": 30.25,
+      "nRMSE_%": 34.19,
+      "bias_%": 5.4,
+      "corr": null
+    },
+    "includes_anomalies": true,
+    "unique_hours_scored": 744
+  },
+  "production": {
+    "validation": {
+      "method": "temporal holdout used for early stopping; preprocessing fit on training partition only",
+      "period": [
+        "2025-12-03",
+        "2026-01-31"
+      ],
+      "model": {
+        "n": 2868,
+        "nMAE_%": 21.57,
+        "nRMSE_%": 26.57,
+        "bias_%": 6.82,
+        "corr": 0.709,
+        "coverage_10_90_%": 78.6,
+        "pinball_avg": 0.0568
+      },
+      "baseline_power_curve": {
+        "n": 2868,
+        "nMAE_%": 23.66,
+        "nRMSE_%": 34.45,
+        "bias_%": 14.48,
+        "corr": 0.653
+      },
+      "baseline_climatology": {
+        "n": 2868,
+        "nMAE_%": 31.94,
+        "nRMSE_%": 36.45,
+        "bias_%": -1.37,
+        "corr": -0.0
+      },
+      "by_lead_day": {
+        "1": {
+          "n": 1434,
+          "nMAE_%": 21.21,
+          "nRMSE_%": 26.2,
+          "bias_%": 6.8,
+          "corr": 0.719,
+          "coverage_10_90_%": 79.1,
+          "pinball_avg": 0.0559
+        },
+        "2": {
+          "n": 1434,
+          "nMAE_%": 21.92,
+          "nRMSE_%": 26.93,
+          "bias_%": 6.84,
+          "corr": 0.699,
+          "coverage_10_90_%": 78.2,
+          "pinball_avg": 0.0576
+        }
+      }
+    },
+    "version": "1.0.0",
+    "trained_at": "2026-09-23T10:57:51+00:00",
+    "train_period": [
+      "2024-01-20",
+      "2026-01-31"
+    ],
+    "n_train_rows": 34754,
+    "n_anomalies_dropped": 178,
+    "nwp_models": [
+      "ecmwf_ifs025",
+      "gfs_seamless",
+      "icon_seamless"
+    ],
+    "leakage_mode": "strict",
+    "best_iterations": {
+      "mean": 100,
+      "p10": 100,
+      "p50": 165,
+      "p90": 350
+    },
+    "top_features": {
+      "ens_ws_roll6": 0.521,
+      "ens_ws_roll3": 0.217,
+      "ecmwf_ifs025_ws10": 0.034,
+      "doy_sin": 0.022,
+      "doy_cos": 0.018,
+      "pc_qm_smooth": 0.017,
+      "gfs_seamless_wd_sin": 0.017,
+      "icon_seamless_ws10": 0.014,
+      "ecmwf_ifs025_wd_cos": 0.01,
+      "gfs_seamless_wd_cos": 0.009
+    },
+    "power_curve": {
+      "ws": [
+        0.42,
+        0.8,
+        1.26,
+        1.74,
+        2.25,
+        2.75,
+        3.25,
+        3.75,
+        4.26,
+        4.76,
+        5.25,
+        5.74,
+        6.25,
+        6.75,
+        7.25,
+        7.75,
+        8.23,
+        8.75,
+        9.24,
+        9.75,
+        10.26,
+        10.76,
+        11.25,
+        11.76,
+        12.25,
+        12.74,
+        13.22,
+        13.72,
+        14.21,
+        14.72,
+        15.23,
+        15.72
+      ],
+      "p": [
+        0.01,
+        0.01,
+        0.01,
+        0.01,
+        0.012,
+        0.022,
+        0.037,
+        0.057,
+        0.078,
+        0.108,
+        0.144,
+        0.19,
+        0.248,
+        0.315,
+        0.39,
+        0.467,
+        0.538,
+        0.616,
+        0.687,
+        0.762,
+        0.836,
+        0.898,
+        0.945,
+        0.967,
+        0.97,
+        0.97,
+        0.97,
+        0.97,
+        0.97,
+        0.97,
+        0.97,
+        0.971
+      ]
+    },
+    "ws_train_range": [
+      0.47000000000000003,
+      21.536666666666672
+    ],
+    "site": "turbine_2",
+    "weather_source": "open-meteo-previous-runs",
+    "data": {
+      "source_csv": "C:\\Users\\bolat\\Desktop\\wind_forecast_ml\\data\\raw\\turbine_2.csv",
+      "sha256": "820578cd18bb557cd30c2e102f3ae5a386dfc6c489a5a15743339c2b017305e5",
+      "raw_rows": 149499,
+      "duplicate_timestamps": 0,
+      "raw_missing_values": {
+        "ID": 0,
+        "Статистическое время": 0,
+        "Средняя скорость ветра(m/s)": 0,
+        "Нормализованная активная мощность": 0,
+        "Средняя температура окружающей среды(°C)": 0
+      },
+      "raw_period": [
+        "2023-03-11 00:00:00",
+        "2026-01-31 23:50:00"
+      ],
+      "hourly_rows": 24919,
+      "anomaly_hours": 103,
+      "weather_site": "turbine_1",
+      "weather_coordinates": [
+        43.64515,
+        78.535604
+      ],
+      "weather_source": "open-meteo-previous-runs",
+      "weather_rows_available": 35602,
+      "weather_first_available": "2024-01-20 18:00:00",
+      "versions": {
+        "python": "3.14.5",
+        "pandas": "3.0.3",
+        "numpy": "2.5.1",
+        "lightgbm": "4.7.0",
+        "scikit_learn": "1.9.1"
+      },
+      "training_parameters": {
+        "learning_rate": 0.03,
+        "num_leaves": 31,
+        "min_child_samples": 40,
+        "feature_fraction": 0.8,
+        "bagging_fraction": 0.8,
+        "bagging_freq": 1,
+        "lambda_l2": 1.0,
+        "verbose": -1,
+        "n_jobs": 4,
+        "random_state": 42,
+        "deterministic": true,
+        "force_col_wise": true
+      },
+      "weather_site_assumption": "Unconfirmed shared weather location: turbine_2 uses turbine_1 forecasts; confirm location before operational use."
+    },
+    "test_before_final_refit": {
+      "method": "untouched chronological test; no test labels used for fitting or early stopping",
+      "period": [
+        "2026-01-01",
+        "2026-01-31"
+      ],
+      "evaluation_model_train_period": [
+        "2024-01-20",
+        "2025-12-31"
+      ],
+      "model": {
+        "n": 1488,
+        "nMAE_%": 20.19,
+        "nRMSE_%": 25.86,
+        "bias_%": 9.88,
+        "corr": 0.712,
+        "coverage_10_90_%": 68.3,
+        "pinball_avg": 0.0571
+      },
+      "by_lead_day": {
+        "1": {
+          "n": 744,
+          "nMAE_%": 19.76,
+          "nRMSE_%": 25.54,
+          "bias_%": 9.88,
+          "corr": 0.721,
+          "coverage_10_90_%": 69.0,
+          "pinball_avg": 0.056
+        },
+        "2": {
+          "n": 744,
+          "nMAE_%": 20.61,
+          "nRMSE_%": 26.18,
+          "bias_%": 9.88,
+          "corr": 0.702,
+          "coverage_10_90_%": 67.7,
+          "pinball_avg": 0.0582
+        }
+      },
+      "baseline_power_curve": {
+        "n": 1488,
+        "nMAE_%": 25.57,
+        "nRMSE_%": 36.53,
+        "bias_%": 18.6,
+        "corr": 0.628
+      },
+      "baseline_climatology": {
+        "n": 1488,
+        "nMAE_%": 30.25,
+        "nRMSE_%": 34.19,
+        "bias_%": 5.4,
+        "corr": null
+      },
+      "includes_anomalies": true,
+      "unique_hours_scored": 744
+    },
+    "test_note": "Test metrics belong to evaluation_model.joblib; production model is refit including the test month."
+  },
+  "smoke_forecast": {
+    "issue_date": "2026-01-31",
+    "issue_time_local": "2026-01-31 12:00",
+    "source": "open-meteo-previous-runs",
+    "leakage_mode": "strict",
+    "previous_days_used": {
+      "1": 2,
+      "2": 3
+    },
+    "models_ok": [
+      "ecmwf_ifs025",
+      "gfs_seamless",
+      "icon_seamless"
+    ],
+    "models_failed": {},
+    "target_start": "2026-02-01 00:00:00",
+    "target_end": "2026-02-02 23:00:00",
+    "n_hours": 48,
+    "weather_hash": "4fee95592457d6f5"
+  }
+}
