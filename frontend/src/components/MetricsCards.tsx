@@ -9,7 +9,6 @@ const GRID = '#e6e6e6'
 
 interface Props {
   metrics: MetricsResponse | null
-  onSelectDate: (date: string) => void
 }
 
 function LeadTimeTooltip({ active, payload, label }: TooltipContentProps) {
@@ -40,13 +39,10 @@ function heatColor(value: number, min: number, max: number): string {
 
 const WEEKDAY_LABELS = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС']
 
-function CalendarHeatmap({
-  byDay,
-  onSelectDate,
-}: {
-  byDay: MetricsResponse['byDay']
-  onSelectDate: (date: string) => void
-}) {
+// v1.2: не кликабельно — byDay теперь за январь (отложенный тест), а /api/forecast
+// принимает только 31.01–26.02. Клик сюда увёл бы на дату, для которой прогноза нет.
+// Точное значение даёт наведение (title).
+function CalendarHeatmap({ byDay }: { byDay: MetricsResponse['byDay'] }) {
   if (byDay.length === 0) return null
 
   const values = byDay.map((d) => d.mae)
@@ -69,16 +65,14 @@ function CalendarHeatmap({
       <div className="calendar-grid">
         {cells.map((cell, i) =>
           cell ? (
-            <button
+            <span
               key={cell.date}
-              type="button"
               className="calendar-cell"
               style={{ background: heatColor(cell.mae, min, max) }}
-              onClick={() => onSelectDate(cell.date)}
               title={`${cell.date} · MAE ${cell.mae.toFixed(3)}`}
             >
               {new Date(`${cell.date}T00:00:00Z`).getUTCDate()}
-            </button>
+            </span>
           ) : (
             <span key={`pad-${i}`} className="calendar-cell calendar-cell-empty" />
           ),
@@ -88,12 +82,13 @@ function CalendarHeatmap({
   )
 }
 
-export function MetricsCards({ metrics, onSelectDate }: Props) {
+export function MetricsCards({ metrics }: Props) {
   if (!metrics) return <div className="muted">Загрузка метрик...</div>
 
+  const better =
+    metrics.baselineMae !== null && metrics.baselineMae > 0 ? metrics.mae <= metrics.baselineMae : null
   const improvementPct =
-    metrics.baselineMae > 0 ? ((metrics.baselineMae - metrics.mae) / metrics.baselineMae) * 100 : 0
-  const better = improvementPct >= 0
+    better !== null ? Math.abs(((metrics.baselineMae! - metrics.mae) / metrics.baselineMae!) * 100) : null
 
   const powerCurveImprovementPct =
     metrics.powerCurveBaselineMae && metrics.powerCurveBaselineMae > 0
@@ -107,9 +102,11 @@ export function MetricsCards({ metrics, onSelectDate }: Props) {
         <div className="spec-cell">
           <div className="stat-value">{metrics.mae.toFixed(3)}</div>
           <div className="stat-label">MAE</div>
-          <div className={`stat-delta ${better ? 'stat-delta-good' : 'stat-delta-bad'}`}>
-            {better ? '▼' : '▲'} {Math.abs(improvementPct).toFixed(0)}% vs persistence ({metrics.baselineMae.toFixed(3)})
-          </div>
+          {better !== null && improvementPct !== null && (
+            <div className={`stat-delta ${better ? 'stat-delta-good' : 'stat-delta-bad'}`}>
+              {better ? '▼' : '▲'} {improvementPct.toFixed(0)}% vs persistence ({metrics.baselineMae!.toFixed(3)})
+            </div>
+          )}
           {powerCurveImprovementPct !== null && (
             <div className={`stat-delta ${betterThanPowerCurve ? 'stat-delta-good' : 'stat-delta-bad'}`}>
               {betterThanPowerCurve ? '▼' : '▲'} {Math.abs(powerCurveImprovementPct).toFixed(0)}% vs power curve (
@@ -128,6 +125,16 @@ export function MetricsCards({ metrics, onSelectDate }: Props) {
           <div className="stat-label">MAPE</div>
         </div>
 
+        {metrics.bias !== null && (
+          <div className="spec-cell">
+            <div className="stat-value">
+              {metrics.bias >= 0 ? '+' : ''}
+              {metrics.bias.toFixed(3)}
+            </div>
+            <div className="stat-label">Смещение{metrics.bias >= 0 ? ' (завышает)' : ' (занижает)'}</div>
+          </div>
+        )}
+
         {metrics.intervalCoverage !== null && (
           <div className="spec-cell">
             <div className="stat-value">{(metrics.intervalCoverage * 100).toFixed(0)}%</div>
@@ -138,8 +145,8 @@ export function MetricsCards({ metrics, onSelectDate }: Props) {
 
       {metrics.byDay.length > 0 && (
         <div className="chart-card card byday-panel">
-          <div className="stat-label">MAE по дням</div>
-          <CalendarHeatmap byDay={metrics.byDay} onSelectDate={onSelectDate} />
+          <div className="stat-label">MAE по дням отложенного теста</div>
+          <CalendarHeatmap byDay={metrics.byDay} />
         </div>
       )}
 

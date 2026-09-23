@@ -4,6 +4,12 @@ import type { AgentLogResponse, AgentStepStatus, HorizonHours } from '../types'
 
 const POLL_INTERVAL_MS = 2000
 
+// /api/agent-log — единственный эндпоинт, где ревизии всё ещё старые (мок,
+// не тронутый переходом на реальный ML): 4 плановых цикла в сутки, 00/06/12/18 UTC.
+// Не связано с /api/forecast/revisions (там теперь версии по суткам, см. ForecastVersions).
+const AGENT_REVISIONS = [1, 2, 3, 4]
+const AGENT_REVISION_LABEL: Record<number, string> = { 1: '00 UTC', 2: '06 UTC', 3: '12 UTC', 4: '18 UTC' }
+
 const STATUS_LABEL: Record<AgentStepStatus, string> = {
   success: 'Готово',
   failed: 'Ошибка',
@@ -34,14 +40,19 @@ interface Props {
   turbineId: string
   date: string
   horizonHours: HorizonHours
-  revision: number
 }
 
-export function AgentLogPanel({ turbineId, date, horizonHours, revision }: Props) {
+export function AgentLogPanel({ turbineId, date, horizonHours }: Props) {
+  const [revision, setRevision] = useState(1)
   const [log, setLog] = useState<AgentLogResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
   const [pollKey, setPollKey] = useState(0)
+
+  // Смена даты/турбины — сбрасываем на плановый цикл 00 UTC.
+  useEffect(() => {
+    setRevision(1)
+  }, [turbineId, date])
 
   useEffect(() => {
     let cancelled = false
@@ -97,6 +108,18 @@ export function AgentLogPanel({ turbineId, date, horizonHours, revision }: Props
           {running ? 'Запуск...' : 'Запустить новый цикл'}
         </button>
         {live && <span className="agent-log-live">выполняется</span>}
+        <div className="agent-revision-row">
+          {AGENT_REVISIONS.map((r) => (
+            <button
+              key={r}
+              type="button"
+              className={r === revision ? 'agent-revision-btn active' : 'agent-revision-btn'}
+              onClick={() => setRevision(r)}
+            >
+              {AGENT_REVISION_LABEL[r]}
+            </button>
+          ))}
+        </div>
       </div>
 
       {error && <pre className="error">Ошибка: {error}</pre>}

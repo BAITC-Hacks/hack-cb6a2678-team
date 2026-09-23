@@ -10,6 +10,7 @@ const TYPE_LABEL: Record<ForecastAlert['type'], string> = {
   ramp_down: 'Резкий спад',
   ramp_up: 'Резкий рост',
   low_confidence: 'Низкая уверенность',
+  model_physics_gap: 'Расхождение с физикой',
 }
 
 const SEVERITY_LABEL: Record<ForecastAlert['severity'], string> = {

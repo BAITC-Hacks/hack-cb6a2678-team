@@ -2,6 +2,8 @@ import type { ForecastResponse } from '../types'
 
 interface Props {
   forecast: ForecastResponse
+  issueTimeLocal: string | null
+  localTz: string | null
 }
 
 function formatTime(ts: string): string {
@@ -13,13 +15,18 @@ function formatTime(ts: string): string {
   })
 }
 
-export function ForecastMeta({ forecast }: Props) {
+export function ForecastMeta({ forecast, issueTimeLocal, localTz }: Props) {
   return (
     <div className="forecast-meta">
       <span className="forecast-meta-item">
         Погода: {forecast.weatherSource} · выпущена {formatTime(forecast.weatherIssuedAt)}
       </span>
       <span className="forecast-meta-item">Модель: {forecast.modelVersion}</span>
+      {issueTimeLocal && localTz && (
+        <span className="forecast-meta-item">
+          Выпуск прогноза: {issueTimeLocal} ({localTz})
+        </span>
+      )}
     </div>
   )
 }

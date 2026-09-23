@@ -35,32 +35,29 @@ export function getForecast(
   turbineId: string,
   date: string,
   horizonHours: HorizonHours = 48,
-  revision = 1,
 ): Promise<ForecastResponse> {
-  const params = new URLSearchParams({
-    turbineId,
-    date,
-    horizonHours: String(horizonHours),
-    revision: String(revision),
-  })
+  const params = new URLSearchParams({ turbineId, date, horizonHours: String(horizonHours) })
   return fetch(`${BASE}/forecast?${params}`).then((res) => handleResponse<ForecastResponse>(res))
 }
 
-export function getForecastRevisions(turbineId: string, date: string): Promise<ForecastRevisionsResponse> {
-  const params = new URLSearchParams({ turbineId, date })
+// v1.2: date здесь — целевые сутки прогноза (день, для которого хотим увидеть версии),
+// а не день выпуска. См. описание /api/forecast/revisions в openapi.yaml.
+export function getForecastRevisions(turbineId: string, targetDate: string): Promise<ForecastRevisionsResponse> {
+  const params = new URLSearchParams({ turbineId, date: targetDate })
   return fetch(`${BASE}/forecast/revisions?${params}`).then((res) =>
     handleResponse<ForecastRevisionsResponse>(res),
   )
 }
 
-export function getMetrics(
-  from: string,
-  to: string,
-  turbineId?: string,
-): Promise<MetricsResponse> {
-  const params = new URLSearchParams({ from, to })
+// v1.2: from/to необязательны — без них бэкенд берёт весь период отложенного
+// теста (см. MetaResponse.metricsFrom/metricsTo).
+export function getMetrics(turbineId?: string, from?: string, to?: string): Promise<MetricsResponse> {
+  const params = new URLSearchParams()
   if (turbineId) params.set('turbineId', turbineId)
-  return fetch(`${BASE}/metrics?${params}`).then((res) => handleResponse<MetricsResponse>(res))
+  if (from) params.set('from', from)
+  if (to) params.set('to', to)
+  const query = params.toString()
+  return fetch(`${BASE}/metrics${query ? `?${query}` : ''}`).then((res) => handleResponse<MetricsResponse>(res))
 }
 
 export function getAgentLog(date: string, turbineId?: string, revision = 1): Promise<AgentLogResponse> {

@@ -13,6 +13,10 @@ export interface MetaResponse {
   horizons: HorizonHours[]
   revisionsPerDay: number
   timezone: string
+  issueTimeLocal: string
+  localTz: string
+  metricsFrom: string | null
+  metricsTo: string | null
   modelVersion: string
   llmModel: string
 }
@@ -23,8 +27,8 @@ export interface ForecastPoint {
   p10: number | null
   p90: number | null
   actualPower: number | null
-  windSpeed: number
-  temperature: number
+  windSpeed: number | null
+  temperature: number | null
 }
 
 export interface ForecastSummary {
@@ -36,7 +40,13 @@ export interface ForecastSummary {
   lowPowerHours: number
 }
 
-export type AlertType = 'icing' | 'storm_cutout' | 'ramp_down' | 'ramp_up' | 'low_confidence'
+export type AlertType =
+  | 'icing'
+  | 'storm_cutout'
+  | 'ramp_down'
+  | 'ramp_up'
+  | 'low_confidence'
+  | 'model_physics_gap'
 export type AlertSeverity = 'info' | 'warning' | 'critical'
 
 export interface ForecastAlert {
@@ -104,9 +114,13 @@ export interface MetricsResponse {
   mae: number
   rmse: number
   mape: number
-  baselineMae: number
+  baselineMae: number | null
   powerCurveBaselineMae: number | null
   intervalCoverage: number | null
+  bias: number | null
+  sampleHours: number
+  evaluationModelVersion: string | null
+  evaluationSource: string | null
   byDay: DailyMetric[]
   byLeadTime: LeadTimeMetric[]
 }

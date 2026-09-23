@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { getForecast, getForecastRevisions, getMeta, getMetrics, getTurbines } from './api'
 import { AgentLogPanel } from './components/AgentLogPanel'
 import { AlertsList } from './components/AlertsList'
@@ -7,9 +7,9 @@ import { DateSelector } from './components/DateSelector'
 import { ForecastChart } from './components/ForecastChart'
 import { ForecastMeta } from './components/ForecastMeta'
 import { ForecastSummaryTiles } from './components/ForecastSummaryTiles'
+import { ForecastVersions } from './components/ForecastVersions'
 import { HorizonSelector } from './components/HorizonSelector'
 import { MetricsCards } from './components/MetricsCards'
-import { RevisionSelector } from './components/RevisionSelector'
 import { TurbineMap } from './components/TurbineMap'
 import { TurbineSelector } from './components/TurbineSelector'
 import type {
@@ -23,7 +23,13 @@ import type {
 import './App.css'
 
 const FALLBACK_FROM = '2026-01-31'
-const FALLBACK_TO = '2026-02-27'
+const FALLBACK_TO = '2026-02-26'
+
+function addDays(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
 
 function App() {
   const [meta, setMeta] = useState<MetaResponse | null>(null)
@@ -31,7 +37,6 @@ function App() {
   const [turbineId, setTurbineId] = useState('t1')
   const [date, setDate] = useState('2026-02-01')
   const [horizonHours, setHorizonHours] = useState<HorizonHours>(48)
-  const [revision, setRevision] = useState(1)
   const [showActual, setShowActual] = useState(false)
 
   const [forecast, setForecast] = useState<ForecastResponse | null>(null)
@@ -39,7 +44,9 @@ function App() {
   const [metrics, setMetrics] = useState<MetricsResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const forecastSectionRef = useRef<HTMLElement | null>(null)
+  // v1.2: /forecast/revisions хочет целевые сутки, а не день выпуска. Прогноз, выпущенный
+  // в `date`, покрывает сутки date+1/date+2 — показываем версии для первых из них (date+1).
+  const revisionsTargetDate = addDays(date, 1)
 
   useEffect(() => {
     getMeta()
@@ -54,39 +61,24 @@ function App() {
   }, [])
 
   useEffect(() => {
-    getForecast(turbineId, date, horizonHours, revision)
+    getForecast(turbineId, date, horizonHours)
       .then(setForecast)
       .catch((e: Error) => setError(e.message))
-  }, [turbineId, date, horizonHours, revision])
+  }, [turbineId, date, horizonHours])
 
   useEffect(() => {
-    getForecastRevisions(turbineId, date)
+    getForecastRevisions(turbineId, revisionsTargetDate)
       .then((res) => setRevisions(res.revisions))
       .catch((e: Error) => setError(e.message))
-  }, [turbineId, date])
+  }, [turbineId, revisionsTargetDate])
 
   useEffect(() => {
-    const from = meta?.backtestFrom ?? FALLBACK_FROM
-    const to = meta?.backtestTo ?? FALLBACK_TO
-    getMetrics(from, to, turbineId)
+    // v1.2: без from/to бэкенд сам берёт весь период отложенного теста (январь —
+    // факта за февраль нет ни у кого, см. MetaResponse.metricsFrom/metricsTo).
+    getMetrics(turbineId)
       .then(setMetrics)
       .catch((e: Error) => setError(e.message))
-  }, [turbineId, meta])
-
-  const handleDateChange = (d: string) => {
-    setDate(d)
-    setRevision(1)
-  }
-
-  const handleTurbineChange = (id: string) => {
-    setTurbineId(id)
-    setRevision(1)
-  }
-
-  const handleSelectDateFromCalendar = (d: string) => {
-    handleDateChange(d)
-    forecastSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
+  }, [turbineId])
 
   return (
     <div className="app">
@@ -96,10 +88,10 @@ function App() {
           <span>Agentic AI-прогноз выработки ВЭС</span>
         </div>
         <div className="filters">
-          <TurbineSelector turbines={turbines} value={turbineId} onChange={handleTurbineChange} />
+          <TurbineSelector turbines={turbines} value={turbineId} onChange={setTurbineId} />
           <DateSelector
             value={date}
-            onChange={handleDateChange}
+            onChange={setDate}
             from={meta?.backtestFrom ?? FALLBACK_FROM}
             to={meta?.backtestTo ?? FALLBACK_TO}
           />
@@ -115,21 +107,25 @@ function App() {
             <h2>Расположение турбин</h2>
           </div>
           <div className="bento-tile-content">
-            <TurbineMap turbines={turbines} selectedTurbineId={turbineId} onSelect={handleTurbineChange} />
+            <TurbineMap turbines={turbines} selectedTurbineId={turbineId} onSelect={setTurbineId} />
           </div>
         </section>
 
-        <section className="bento-tile bento-tile-forecast" ref={forecastSectionRef}>
+        <section className="bento-tile bento-tile-forecast">
           <div className="section-header">
             <h2>Почасовой прогноз выработки</h2>
           </div>
           <div className="bento-tile-content">
-            <RevisionSelector revisions={revisions} value={revision} onChange={setRevision} />
+            <ForecastVersions targetDate={revisionsTargetDate} revisions={revisions} />
 
             {forecast ? (
               <>
                 <div className="forecast-toolbar">
-                  <ForecastMeta forecast={forecast} />
+                  <ForecastMeta
+                    forecast={forecast}
+                    issueTimeLocal={meta?.issueTimeLocal ?? null}
+                    localTz={meta?.localTz ?? null}
+                  />
                   <label className="show-actual-toggle">
                     <input
                       type="checkbox"
@@ -153,11 +149,12 @@ function App() {
         <section className="bento-tile bento-tile-metrics">
           <div className="section-header">
             <h2>
-              Качество · {meta?.backtestFrom ?? FALLBACK_FROM} – {meta?.backtestTo ?? FALLBACK_TO}
+              Качество на отложенном тесте ·{' '}
+              {metrics ? `${metrics.periodFrom} – ${metrics.periodTo}` : (meta?.metricsFrom ?? '…')}
             </h2>
           </div>
           <div className="bento-tile-content">
-            <MetricsCards metrics={metrics} onSelectDate={handleSelectDateFromCalendar} />
+            <MetricsCards metrics={metrics} />
           </div>
         </section>
 
@@ -166,7 +163,7 @@ function App() {
             <h2>Agent trace</h2>
           </div>
           <div className="bento-tile-content">
-            <AgentLogPanel turbineId={turbineId} date={date} horizonHours={horizonHours} revision={revision} />
+            <AgentLogPanel turbineId={turbineId} date={date} horizonHours={horizonHours} />
           </div>
         </section>
 
