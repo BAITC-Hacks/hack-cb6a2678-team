@@ -17,6 +17,8 @@ backend/src/main/kotlin/com/ybkuanysh/backend/
 │  └─ AgentWeatherView.kt   — компактный вид погоды для LLM: итоги и готовые выводы по дням
 ├─ config/WebConfig.kt      — CORS для /api/**, бин Clock
 ├─ ml/                     — клиент ML-сервиса по contracts/ml-service.openapi.yaml (модели ответа, RestClient)
+├─ metrics/                — точность на отложенном тесте: EvaluationRepository (ML /v1/evaluation или CSV),
+│                             ScadaRepository (факт для бейзлайна persistence), MetricsService
 ├─ forecast/
 │  ├─ ForecastService.kt    — ответ ML → публичный ForecastResponse; версии прогноза на сутки
 │  └─ ForecastAnalytics.kt  — сводка, алерты по правилам, шаблонный отчёт (общие с моками)
@@ -53,6 +55,8 @@ open http://localhost:8080/swagger-ui.html
 | `OLLAMA_PULL_STRATEGY` | `never` | `when_missing` — бэкенд сам скачает модель при старте |
 | `ML_BASE_URL` | `http://localhost:8000` | адрес ML-сервиса |
 | `ML_LOCAL_TZ` | `Asia/Almaty` | местный пояс станции (пока ML не отдаёт `local_tz` сам) |
+| `ML_EVALUATION_DIR` | `../ML/outputs/training` | CSV отложенного теста, пока ML не отдаёт `/v1/evaluation` |
+| `ML_SCADA_DIR` | `../ML/data/raw` | SCADA из датасета — для бейзлайна persistence |
 | `WEATHER_MODEL` | `ecmwf_ifs` | модель Open-Meteo |
 | `WEATHER_PUBLICATION_DELAY` | `7h` | через сколько после инициализации прогон считается опубликованным |
 | `WEATHER_CACHE_DIR` | `../data/weather-cache` | кэш ответов (путь от `backend/`) |
@@ -96,7 +100,8 @@ fun myTool(
 - Выводы о рисках формирует код (`conclusions`), модель их только пересказывает. Почасовые данные — по флагу `detailed`.
 - После изменения инструмента задайте агенту 2–3 типичных вопроса по 2 раза и сверьте ответы с REST API.
 
-Инструменты сейчас: `listTurbines`, `getForecast` и `getForecastRevisions` (ML), `getWeather` (Open-Meteo), `getMetrics` (моки).
+Инструменты сейчас: `listTurbines`, `getForecast` и `getForecastRevisions` (ML), `getWeather` (Open-Meteo),
+`getMetrics` (отложенный тест, готовые выводы).
 Все дни и часы для агента — по местному времени станции (`ml.local-tz`).
 
 Тесты не ходят в сеть: ML подменяется сохранёнными ответами (`support/FixtureMl.kt`, `src/test/resources/ml/`),

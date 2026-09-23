@@ -9,6 +9,7 @@ import com.ybkuanysh.backend.dto.RunForecastRequest
 import com.ybkuanysh.backend.dto.RunForecastResponse
 import com.ybkuanysh.backend.dto.Turbine
 import com.ybkuanysh.backend.forecast.ForecastService
+import com.ybkuanysh.backend.metrics.MetricsService
 import com.ybkuanysh.backend.ml.MlProperties
 import com.ybkuanysh.backend.mock.MockDataService
 import org.springframework.beans.factory.annotation.Value
@@ -29,22 +30,28 @@ import java.time.temporal.ChronoUnit
 class WesController(
     private val mock: MockDataService,
     private val forecasts: ForecastService,
+    private val metricsService: MetricsService,
     private val ml: MlProperties,
     @Value("\${spring.ai.ollama.chat.model}") private val llmModel: String,
 ) {
 
     @GetMapping("/meta")
-    fun getMeta() = MetaResponse(
-        backtestFrom = ForecastService.BACKTEST_FROM,
-        backtestTo = ForecastService.BACKTEST_TO,
-        horizons = listOf(24, 48),
-        revisionsPerDay = ForecastService.VERSIONS_PER_TARGET_DAY,
-        timezone = "UTC",
-        issueTimeLocal = "%02d:00".format(ml.issueHourLocal),
-        localTz = ml.localTz,
-        modelVersion = forecasts.modelVersion("t1") ?: "unavailable",
-        llmModel = llmModel,
-    )
+    fun getMeta(): MetaResponse {
+        val metricsPeriod = metricsService.period()
+        return MetaResponse(
+            backtestFrom = ForecastService.BACKTEST_FROM,
+            backtestTo = ForecastService.BACKTEST_TO,
+            horizons = listOf(24, 48),
+            revisionsPerDay = ForecastService.VERSIONS_PER_TARGET_DAY,
+            timezone = "UTC",
+            issueTimeLocal = "%02d:00".format(ml.issueHourLocal),
+            localTz = ml.localTz,
+            metricsFrom = metricsPeriod?.first,
+            metricsTo = metricsPeriod?.second,
+            modelVersion = forecasts.modelVersion("t1") ?: "unavailable",
+            llmModel = llmModel,
+        )
+    }
 
     @GetMapping("/turbines")
     fun getTurbines(): List<Turbine> = mock.turbines
@@ -65,14 +72,18 @@ class WesController(
     @GetMapping("/metrics")
     fun getMetrics(
         @RequestParam(required = false) turbineId: String?,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) from: LocalDate,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) to: LocalDate,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) from: LocalDate?,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) to: LocalDate?,
     ): MetricsResponse {
+        // Без дат — весь период отложенного теста
+        val period = if (from == null || to == null) metricsService.period() else null
+        val from = from ?: period?.first ?: throw BadRequestException("Нет данных отложенного теста")
+        val to = to ?: period?.second ?: throw BadRequestException("Нет данных отложенного теста")
         if (from.isAfter(to)) throw BadRequestException("'from' must not be after 'to'")
         if (ChronoUnit.DAYS.between(from, to) > MAX_METRICS_DAYS) {
             throw BadRequestException("Period must not exceed $MAX_METRICS_DAYS days")
         }
-        return mock.metrics(turbineId, from, to)
+        return metricsService.metrics(turbineId, from, to)
     }
 
     @GetMapping("/agent-log")

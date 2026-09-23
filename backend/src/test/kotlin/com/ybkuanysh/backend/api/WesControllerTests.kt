@@ -81,20 +81,29 @@ class WesControllerTests(@Autowired val mvc: MockMvc) {
     }
 
     @Test
-    fun `metrics for february`() {
-        mvc.get("/api/metrics?turbineId=t1&from=2026-02-01&to=2026-02-28").andExpect {
+    fun `metrics on the January holdout`() {
+        mvc.get("/api/metrics?turbineId=t1&from=2026-01-01&to=2026-01-03").andExpect {
             status { isOk() }
-            jsonPath("$.periodFrom") { value("2026-02-01") }
-            jsonPath("$.periodTo") { value("2026-02-28") }
-            jsonPath("$.mae") { isNumber() }
-            jsonPath("$.baselineMae") { isNumber() }
-            jsonPath("$.byDay.length()") { value(28) }
-        }
-        mvc.get("/api/metrics?from=2026-02-01&to=2026-02-03").andExpect {
-            status { isOk() }
-            jsonPath("$.turbineId") { doesNotExist() }
+            jsonPath("$.periodFrom") { value("2026-01-01") }
+            jsonPath("$.mae") { value(0.212) }
+            jsonPath("$.baselineMae") { value(0.251) }
+            jsonPath("$.bias") { value(0.013) }
+            jsonPath("$.sampleHours") { value(72) }
             jsonPath("$.byDay.length()") { value(3) }
         }
+        mvc.get("/api/metrics?from=2026-01-01&to=2026-01-03").andExpect {
+            status { isOk() }
+            jsonPath("$.turbineId") { doesNotExist() }
+            jsonPath("$.sampleHours") { value(144) }
+        }
+        // Без дат — весь период теста
+        mvc.get("/api/metrics?turbineId=t1").andExpect {
+            status { isOk() }
+            jsonPath("$.periodFrom") { value("2026-01-01") }
+            jsonPath("$.periodTo") { value("2026-01-03") }
+        }
+        // Факта за февраль нет — метрики за него посчитать нельзя
+        mvc.get("/api/metrics?from=2026-02-01&to=2026-02-28").andExpect { status { isBadRequest() } }
         mvc.get("/api/metrics?from=2026-02-10&to=2026-02-01").andExpect { status { isBadRequest() } }
     }
 
@@ -146,6 +155,8 @@ class WesControllerTests(@Autowired val mvc: MockMvc) {
             jsonPath("$.revisionsPerDay") { value(2) }
             jsonPath("$.issueTimeLocal") { value("12:00") }
             jsonPath("$.localTz") { value("Asia/Almaty") }
+            jsonPath("$.metricsFrom") { value("2026-01-01") }
+            jsonPath("$.metricsTo") { value("2026-01-03") }
             jsonPath("$.modelVersion") { value("windml-1.0.0-2026-09-23") }
             jsonPath("$.llmModel") { isString() }
         }
@@ -188,9 +199,9 @@ class WesControllerTests(@Autowired val mvc: MockMvc) {
 
     @Test
     fun `metrics include baselines, coverage and lead time`() {
-        mvc.get("/api/metrics?turbineId=t1&from=2026-01-31&to=2026-02-27").andExpect {
+        mvc.get("/api/metrics?turbineId=t1&from=2026-01-01&to=2026-01-03").andExpect {
             status { isOk() }
-            jsonPath("$.powerCurveBaselineMae") { isNumber() }
+            jsonPath("$.powerCurveBaselineMae") { value(0.276) }
             jsonPath("$.intervalCoverage") { isNumber() }
             jsonPath("$.byLeadTime.length()") { value(48) }
             jsonPath("$.byLeadTime[0].leadHour") { value(1) }

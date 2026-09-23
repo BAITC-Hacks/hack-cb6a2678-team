@@ -1,5 +1,6 @@
 package com.ybkuanysh.backend.ml
 
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
 import org.springframework.web.client.RestClientException
@@ -11,6 +12,9 @@ import java.time.LocalDate
 interface MlForecastSource {
     fun forecast(site: String, issueDate: LocalDate): MlForecastResponse
     fun model(site: String): MlModelInfo
+
+    /** Отложенный тест (`GET /v1/evaluation/{site}`, контракт v2); null — ML пока его не отдаёт. */
+    fun evaluation(site: String): MlEvaluationResponse? = null
 }
 
 @Component
@@ -21,6 +25,7 @@ class MlClient(
 ) : MlForecastSource {
 
     private val http = builder.baseUrl(props.baseUrl).build()
+    private val log = LoggerFactory.getLogger(javaClass)
 
     override fun forecast(site: String, issueDate: LocalDate): MlForecastResponse = call("forecast $site $issueDate") {
         http.post().uri("/v1/forecast")
@@ -31,6 +36,14 @@ class MlClient(
 
     override fun model(site: String): MlModelInfo = call("model $site") {
         http.get().uri("/v1/models/{site}", site).retrieve().body(MlModelInfo::class.java)
+    }
+
+    override fun evaluation(site: String): MlEvaluationResponse? = try {
+        http.get().uri("/v1/evaluation/{site}", site).retrieve().body(MlEvaluationResponse::class.java)
+    } catch (e: RestClientException) {
+        // 404 — эндпоинт ещё не сделан в ML; сетевые ошибки — ML не запущен. В обоих случаях читаем CSV теста
+        log.info("ML evaluation for {} unavailable, falling back to CSV: {}", site, e.message)
+        null
     }
 
     private fun <T : Any> call(what: String, block: () -> T?): T {

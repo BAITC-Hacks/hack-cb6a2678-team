@@ -83,4 +83,26 @@ data class MlModelInfo(
     val trainedUntilUtc: String? = null,
 )
 
+@JsonIgnoreProperties(ignoreUnknown = true)
+@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy::class)
+data class MlEvaluationResponse(
+    val site: String,
+    val modelVersion: String? = null,
+    val trainedUntilUtc: String? = null,
+    val rows: List<MlEvaluationRow> = emptyList(),
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+@JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy::class)
+data class MlEvaluationRow(
+    val timeUtc: String,
+    val leadDay: Int,
+    val forecast: Double,
+    val p10: Double,
+    val p90: Double,
+    val actual: Double? = null,
+    val pcBaseline: Double? = null,
+    val anomaly: Boolean = false,
+)
+
 class MlUnavailableException(message: String) : RuntimeException(message)

@@ -36,6 +36,9 @@ ml:
   base-url: ${ML_BASE_URL:http://localhost:8000}
   local-tz: ${ML_LOCAL_TZ:Asia/Almaty}
   issue-hour-local: 12
+  # Метрики: прогнозы отложенного теста (пока ML не отдаёт /v1/evaluation) и SCADA для бейзлайна persistence
+  evaluation-dir: ${ML_EVALUATION_DIR:../ML/outputs/training}
+  scada-dir: ${ML_SCADA_DIR:../ML/data/raw}
 
 server:
   port: 8080

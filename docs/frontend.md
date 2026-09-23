@@ -1,7 +1,7 @@
 # Фронтенд
 
 React. `/api/forecast` и `/api/forecast/revisions` уже отдают реальный прогноз ML (нужен запущенный ML-сервис,
-см. `AGENTS.md`); `/api/metrics`, `/api/agent-log`, `/api/forecast/run` пока на моках — формат не изменится.
+см. `AGENTS.md`); `/api/metrics` — реальная точность на январском тесте; `/api/agent-log`, `/api/forecast/run` пока на моках — формат не изменится.
 
 - API: `http://localhost:8080/api/**`, CORS открыт.
 - Контракт и примеры: `backend/src/main/resources/static/openapi.yaml`, Swagger UI — http://localhost:8080/swagger-ui.html.
@@ -49,17 +49,23 @@ React. `/api/forecast` и `/api/forecast/revisions` уже отдают реал
 После «Пересчитать» — поллинг `GET /api/agent-log?date&turbineId` раз в 1–2 с, пока все шаги не станут `success`
 (в моках шаги завершаются по одному каждые 2 с).
 
-### 3. Качество за февраль
+### 3. Качество модели
+
+Факта за февраль нет, поэтому точность — на **отложенном тесте, январь 2026** (модель для теста обучена по 31.12.2025).
+Период — `metricsFrom..metricsTo` из `/api/meta`; можно вызвать `/api/metrics` вообще без дат.
+Подпишите на экране: «Точность на январе 2026 (модель не видела эти данные)».
 
 | Что | Откуда |
 |---|---|
-| Главные цифры: наша ошибка vs бейзлайны | `GET /api/metrics?from&to[&turbineId]` → `mae`, `baselineMae`, `powerCurveBaselineMae` |
+| Главные цифры: наша ошибка vs бейзлайны | `GET /api/metrics[?turbineId]` → `mae`, `baselineMae` («как в момент прогноза»), `powerCurveBaselineMae` («без ML») |
+| Смещение | `bias` > 0 — модель завышает (сейчас ≈ +0.10) |
 | «Во сколько раз точнее» | `baselineMae / mae` |
 | Надёжность интервала | `intervalCoverage` (≈0.8 — хорошо) |
 | Календарь-тепловая карта по дням | `byDay[]` (`date`, `mae`); клик → экран 1 на эту дату |
-| График ошибки по горизонту | `byLeadTime[]` (`leadHour` 1..48, `mae`) |
+| График ошибки по горизонту | `byLeadTime[]` (`leadHour` 1..48, `mae`; 1 = 00:00 первых суток прогноза) |
 
-`from`/`to` — из `GET /api/meta`. Без `turbineId` — по всем турбинам.
+Без `turbineId` — по обеим турбинам. Клик по дню в календаре ведёт на январь — там нет прогноза в `/api/forecast`
+(он только для 31.01–26.02), поэтому клик лучше не делать или показывать только метрику дня.
 
 ### 4. Чат с агентом
 

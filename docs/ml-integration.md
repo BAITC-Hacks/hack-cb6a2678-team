@@ -148,7 +148,7 @@
 | 4 | бэкенд | ✅ Контракт API v1.2; `/api/forecast` и `/revisions` на ML; инструменты агента на ML. Сообщить фронту |
 | 5 | бэкенд | Цикл агента: `predict` (ML) → `validate` → алерты (ML `analysis` + погода бэкенда) → отчёт LLM → сохранение |
 | 6 | бэкенд | Бэктест: 27 выпусков × 2 турбины → `data/backtest/*.json` (коммитится), API читает из хранилища, моки уходят |
-| 7 | бэкенд | Метрики из `test_predictions.csv` + persistence по SCADA |
+| 7 | бэкенд | ✅ Метрики из `test_predictions.csv` (или `/v1/evaluation`) + persistence по SCADA |
 | 8 | ML | Пункты 1, 7, 8 (пояс, пороги, калибровка) → переобучение. Бэкенд просто перезапускает бэктест |
 | 9 | все | Docker: `ml` + `backend` + `frontend` + `ollama` в `docker-compose.yml`, `ML_BASE_URL=http://ml:8000` |
 

@@ -44,7 +44,10 @@ class AgentTests(@Autowired val mvc: MockMvc, @Autowired val tools: AgentTools) 
         val fc = tools.getForecast("t2", "2026-02-04", "2026-02-05", true, ctx)
         assertEquals(48, fc.hourly!!.size)
         assertEquals(listOf("За 04.02.2026", "За 05.02.2026"), fc.conclusions.filter { it.startsWith("За ") }.map { it.substringBefore(":") })
-        assertEquals(null, tools.getMetrics(" ", "2026-02-01", "2026-02-03", ctx).turbineId)
+        val metrics = tools.getMetrics(" ", null, null, ctx)
+        assertEquals(null, metrics.turbineId)
+        assertEquals("2026-01-01…2026-01-03", metrics.period)
+        assertTrue(metrics.conclusions.any { it.contains("ЗАВЫШАЕТ") || it.contains("смещения") })
         assertEquals(2, trace.size)
     }
 

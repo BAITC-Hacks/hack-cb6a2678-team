@@ -3,13 +3,10 @@ package com.ybkuanysh.backend.mock
 import com.ybkuanysh.backend.dto.AgentLogResponse
 import com.ybkuanysh.backend.dto.AgentStep
 import com.ybkuanysh.backend.dto.AgentStepStatus
-import com.ybkuanysh.backend.dto.DailyMetric
 import com.ybkuanysh.backend.dto.ForecastPoint
 import com.ybkuanysh.backend.dto.ForecastResponse
 import com.ybkuanysh.backend.dto.ForecastRevision
 import com.ybkuanysh.backend.dto.ForecastRevisionsResponse
-import com.ybkuanysh.backend.dto.LeadTimeMetric
-import com.ybkuanysh.backend.dto.MetricsResponse
 import com.ybkuanysh.backend.dto.RunForecastResponse
 import com.ybkuanysh.backend.dto.Turbine
 import com.ybkuanysh.backend.forecast.ForecastAnalytics
@@ -24,11 +21,9 @@ import java.time.temporal.ChronoUnit
 import java.util.Random
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.PI
-import kotlin.math.abs
 import kotlin.math.pow
 import kotlin.math.round
 import kotlin.math.sin
-import kotlin.math.sqrt
 
 class NotFoundException(message: String) : RuntimeException(message)
 
@@ -100,58 +95,6 @@ class MockDataService(private val clock: Clock, private val weather: WeatherServ
             ForecastRevision(rev, fc.forecastIssuedAt, fc.weatherIssuedAt, mean, change)
         }
         return ForecastRevisionsResponse(turbineId, date, revisions)
-    }
-
-    /** Основные метрики — по горизонту 1–24 ч первой (плановой) ревизии; byLeadTime — по 1–48 ч. */
-    fun metrics(turbineId: String?, from: LocalDate, to: LocalDate): MetricsResponse {
-        val ids = if (turbineId != null) listOf(requireTurbine(turbineId).id) else turbines.map { it.id }
-        val allErr = mutableListOf<Double>()
-        val allPct = mutableListOf<Double>()
-        val baselineErr = mutableListOf<Double>()
-        val powerCurveErr = mutableListOf<Double>()
-        var covered = 0
-        val byLead = Array(48) { mutableListOf<Double>() }
-        val byDay = mutableListOf<DailyMetric>()
-
-        var day = from
-        while (!day.isAfter(to)) {
-            val dayErr = mutableListOf<Double>()
-            for (id in ids) {
-                val fc = forecast(id, day, 48)
-                val persistence = actualPower(id, fc.forecastIssuedAt)
-                fc.points.forEachIndexed { i, p ->
-                    val actual = p.actualPower ?: return@forEachIndexed
-                    val e = p.predictedPower - actual
-                    byLead[i] += e
-                    if (i >= 24) return@forEachIndexed
-                    dayErr += e
-                    baselineErr += persistence - actual
-                    // «Сырая» кривая мощности по ветру на 10 м без поправки на высоту ступицы
-                    powerCurveErr += powerCurve((p.windSpeed ?: 0.0) * 0.85) - actual
-                    if (actual in p.p10!!..p.p90!!) covered++
-                    if (actual > 0.1) allPct += abs(e) / actual
-                }
-            }
-            if (dayErr.isNotEmpty()) {
-                byDay += DailyMetric(day, r3(mae(dayErr)), r3(rmse(dayErr)))
-                allErr += dayErr
-            }
-            day = day.plusDays(1)
-        }
-
-        return MetricsResponse(
-            turbineId = turbineId,
-            periodFrom = from,
-            periodTo = to,
-            mae = r3(mae(allErr)),
-            rmse = r3(rmse(allErr)),
-            mape = r1(if (allPct.isEmpty()) 0.0 else allPct.average() * 100),
-            baselineMae = r3(mae(baselineErr)),
-            powerCurveBaselineMae = r3(mae(powerCurveErr)),
-            intervalCoverage = if (allErr.isEmpty()) null else r3(covered.toDouble() / allErr.size),
-            byDay = byDay,
-            byLeadTime = byLead.mapIndexedNotNull { i, e -> if (e.isEmpty()) null else LeadTimeMetric(i + 1, r3(mae(e))) },
-        )
     }
 
     fun agentLog(date: LocalDate, turbineId: String?, revision: Int = 1): AgentLogResponse {
@@ -271,8 +214,6 @@ class MockDataService(private val clock: Clock, private val weather: WeatherServ
 
     private fun gaussian(vararg key: Any): Double = Random(key.contentHashCode().toLong() * 0x9E3779B97F4A7C15uL.toLong()).nextGaussian()
 
-    private fun mae(e: List<Double>) = if (e.isEmpty()) 0.0 else e.sumOf { abs(it) } / e.size
-    private fun rmse(e: List<Double>) = if (e.isEmpty()) 0.0 else sqrt(e.sumOf { it * it } / e.size)
     private fun r1(x: Double) = round(x * 10) / 10
     private fun r3(x: Double) = round(x * 1000) / 1000
 

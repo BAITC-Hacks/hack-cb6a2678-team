@@ -2,6 +2,9 @@ package com.ybkuanysh.backend.agent
 
 import com.ybkuanysh.backend.dto.AgentToolCall
 import com.ybkuanysh.backend.forecast.ForecastService
+import com.ybkuanysh.backend.metrics.EvaluationRepository
+import com.ybkuanysh.backend.metrics.MetricsService
+import com.ybkuanysh.backend.metrics.ScadaRepository
 import com.ybkuanysh.backend.ml.MlProperties
 import com.ybkuanysh.backend.mock.MockDataService
 import com.ybkuanysh.backend.support.FixtureMl
@@ -48,7 +51,8 @@ class AgentWeatherToolTests {
         val mock = MockDataService(Clock.systemUTC(), weather)
         // localTz = UTC: дни и часы в проверках ниже — в UTC
         val ml = MlProperties(localTz = "Z")
-        return AgentTools(mock, weather, ForecastService(FixtureMl(), ml, weather, mock), ml)
+        val metrics = MetricsService(EvaluationRepository(FixtureMl(), ml), ScadaRepository(ml), ml, mock)
+        return AgentTools(mock, weather, ForecastService(FixtureMl(), ml, weather, mock), metrics, ml)
     }
 
     private fun ctx() = mutableListOf<AgentToolCall>().let { it to ToolContext(mapOf(AgentTools.TRACE_KEY to it)) }

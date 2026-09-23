@@ -19,6 +19,9 @@ data class MetaResponse(
     val timezone: String,
     val issueTimeLocal: String,
     val localTz: String,
+    /** Период отложенного теста, по которому считаются метрики (факта за февраль нет). */
+    val metricsFrom: LocalDate?,
+    val metricsTo: LocalDate?,
     val modelVersion: String,
     val llmModel: String,
 )
@@ -100,9 +103,14 @@ data class MetricsResponse(
     val mae: Double,
     val rmse: Double,
     val mape: Double,
-    val baselineMae: Double,
+    val baselineMae: Double?,
     val powerCurveBaselineMae: Double?,
     val intervalCoverage: Double?,
+    /** Среднее (прогноз − факт): > 0 — модель завышает. */
+    val bias: Double?,
+    val sampleHours: Int,
+    val evaluationModelVersion: String?,
+    val evaluationSource: String?,
     val byDay: List<DailyMetric>,
     val byLeadTime: List<LeadTimeMetric>,
 )

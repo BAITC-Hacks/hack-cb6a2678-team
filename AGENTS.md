@@ -39,11 +39,13 @@ docs/                       — документация
 
 - Публичный API v1.2. `/api/forecast` и `/api/forecast/revisions` — **реальный прогноз ML** (`backend/.../forecast/`,
   клиент `backend/.../ml/`): выпуск в день D 12:00 местного (Asia/Almaty) на сутки D+1 и D+2.
-  `/api/metrics`, `/api/agent-log`, `/api/forecast/run` пока **отдают моки** (`backend/.../mock/MockDataService.kt`).
+  `/api/metrics` — **реальная точность на отложенном тесте (январь 2026)**: факта за февраль в данных нет
+  (`backend/.../metrics/`, прогнозы теста ML + SCADA для бейзлайна).
+  `/api/agent-log`, `/api/forecast/run` пока **отдают моки** (`backend/.../mock/MockDataService.kt`).
 - LLM-агент работает: `POST /api/agent/chat`, Spring AI + Ollama (`qwen3:8b`), инструменты поверх моков.
 - Клиент погоды работает: `backend/.../weather/`, `GET /api/weather` — реальные архивные прогнозы ECMWF IFS
   (Open-Meteo Single Runs API) с защитой от утечки и кэшем в `data/weather-cache/`.
-- Агент: `getForecast`/`getForecastRevisions` — ML, `getWeather` — Open-Meteo, `getMetrics` — моки (помечено в описании).
+- Агент: `getForecast`/`getForecastRevisions` — ML, `getWeather` — Open-Meteo, `getMetrics` — отложенный тест (январь).
   Дни и время для агента — местные (так спрашивает диспетчер и так ML задаёт сутки).
 - ML в `ML/`: обучение, модели двух турбин, погодный кэш (Previous Runs, ECMWF/GFS/ICON), FastAPI `/v1/forecast`,
   офлайн-тесты. Запуск и результаты — `ML/README.md`, `ML/TRAINING.md`. Агент один — в `backend/`

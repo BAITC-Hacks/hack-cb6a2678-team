@@ -25,7 +25,10 @@ info:
     выпуска использованных прогнозов погоды. Он всегда не позже `forecastIssuedAt`.
 
 
-    **Пока демо-данные:** `/api/metrics`, `/api/agent-log`, `/api/forecast/run`.
+    **Метрики** — на отложенном тесте (январь 2026): факта за февраль нет.
+
+
+    **Пока демо-данные:** `/api/agent-log`, `/api/forecast/run`.
   version: 1.2.0
 
 servers:
@@ -236,11 +239,17 @@ paths:
   /api/metrics:
     get:
       tags: [Metrics]
-      summary: Метрики качества модели за период
+      summary: Точность модели на отложенном тесте
       description: >
-        Метрики по плановой ревизии (1). `mae`, `rmse`, `mape`, бейзлайны,
-        `intervalCoverage` и `byDay` считаются по горизонту 1–24 ч;
-        `byLeadTime` — по каждому часу заблаговременности 1–48.
+        Факта за февраль 2026 в данных нет, поэтому точность считается на **отложенном тесте —
+        январе 2026**: прогнозы тестовой модели ML, обученной строго по 31.12.2025, с тем же
+        выпуском (D 12:00 местного → сутки D+1 и D+2). Период — `metricsFrom..metricsTo`
+        из `/api/meta`; без `from`/`to` — весь период теста. Даты — местные сутки прогноза.
+
+
+        `mae`, `rmse`, `mape`, `bias`, бейзлайны, `intervalCoverage`, `byDay` — по первым суткам
+        прогноза (D+1); `byLeadTime` — по каждому часу окна 1–48 (1 = 00:00 суток D+1).
+        400 — за период нет данных теста (например, февраль).
       operationId: getMetrics
       parameters:
         - name: turbineId
@@ -251,18 +260,18 @@ paths:
             type: string
         - name: from
           in: query
-          required: true
+          required: false
+          schema:
+            type: string
+            format: date
+          example: "2026-01-01"
+        - name: to
+          in: query
+          required: false
           schema:
             type: string
             format: date
           example: "2026-01-31"
-        - name: to
-          in: query
-          required: true
-          schema:
-            type: string
-            format: date
-          example: "2026-02-27"
       responses:
         '200':
           description: Метрики за период
@@ -498,6 +507,17 @@ components:
           type: string
           description: Местный пояс станции (в нём задаются сутки прогноза); для отображения на фронте
           example: "Asia/Almaty"
+        metricsFrom:
+          type: string
+          format: date
+          nullable: true
+          description: Начало отложенного теста, по которому считаются метрики
+          example: "2026-01-01"
+        metricsTo:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-01-31"
         modelVersion:
           type: string
           description: Версия ML-модели; "unavailable", если ML-сервис не отвечает
@@ -770,7 +790,7 @@ components:
 
     MetricsResponse:
       type: object
-      required: [periodFrom, periodTo, mae, rmse, mape, baselineMae, byDay, byLeadTime]
+      required: [periodFrom, periodTo, mae, rmse, mape, sampleHours, byDay, byLeadTime]
       properties:
         turbineId:
           type: string
@@ -779,7 +799,7 @@ components:
         periodFrom:
           type: string
           format: date
-          example: "2026-01-31"
+          example: "2026-01-01"
         periodTo:
           type: string
           format: date
@@ -802,20 +822,41 @@ components:
         baselineMae:
           type: number
           format: double
-          description: MAE бейзлайна persistence («мощность как в момент прогноза»)
-          example: 0.067
+          nullable: true
+          description: >
+            MAE бейзлайна persistence: факт за последний полный час перед выпуском
+            (11:00–12:00 местного) на всё окно прогноза
+          example: 0.359
         powerCurveBaselineMae:
           type: number
           format: double
           nullable: true
-          description: MAE бейзлайна «кривая мощности по сырому прогнозу ветра» без ML
-          example: 0.052
+          description: MAE бейзлайна «прогноз ветра через кривую мощности, без ML»
+          example: 0.242
         intervalCoverage:
           type: number
           format: double
           nullable: true
           description: Доля часов, где факт попал в [P10, P90]; в идеале около 0.8
-          example: 0.79
+          example: 0.703
+        bias:
+          type: number
+          format: double
+          nullable: true
+          description: Среднее (прогноз − факт); > 0 — модель завышает
+          example: 0.097
+        sampleHours:
+          type: integer
+          description: Сколько часов с фактом вошло в основные метрики
+          example: 744
+        evaluationModelVersion:
+          type: string
+          nullable: true
+          description: Версия тестовой модели ML (null, пока ML не отдаёт /v1/evaluation)
+        evaluationSource:
+          type: string
+          nullable: true
+          description: Откуда взяты прогнозы теста (ML /v1/evaluation или CSV)
         byDay:
           type: array
           items:

@@ -7,6 +7,7 @@ import com.ybkuanysh.backend.dto.ForecastSummary
 import com.ybkuanysh.backend.dto.MetricsResponse
 import com.ybkuanysh.backend.dto.Turbine
 import com.ybkuanysh.backend.forecast.ForecastService
+import com.ybkuanysh.backend.metrics.MetricsService
 import com.ybkuanysh.backend.ml.MlProperties
 import com.ybkuanysh.backend.mock.MockDataService
 import com.ybkuanysh.backend.weather.WeatherService
@@ -41,6 +42,7 @@ class AgentTools(
     private val mock: MockDataService,
     private val weather: WeatherService,
     private val forecasts: ForecastService,
+    private val metrics: MetricsService,
     ml: MlProperties,
 ) {
 
@@ -90,18 +92,23 @@ class AgentTools(
     }
 
     @Tool(
-        description = "Метрики качества прогноза за период: MAE, RMSE, MAPE, MAE наивного бейзлайна и разбивка по дням. " +
-            "ВНИМАНИЕ: пока синтетические демо-данные — так и скажи пользователю.",
+        description = "Точность модели на отложенном тесте — январь 2026 (факта за февраль нет, поэтому точность за февраль " +
+            "посчитать нельзя). Модель для теста обучена строго по 31.12.2025. Сравнение с бейзлайнами «мощность как в момент " +
+            "прогноза» и «кривая мощности без ML». conclusions — готовые выводы: отвечай по ним. " +
+            "Без дат — весь доступный период теста.",
     )
     fun getMetrics(
-        @ToolParam(description = "Идентификатор турбины; пусто — по всем турбинам", required = false) turbineId: String?,
-        @ToolParam(description = "Начало периода, yyyy-MM-dd") from: String,
-        @ToolParam(description = "Конец периода включительно, yyyy-MM-dd") to: String,
+        @ToolParam(description = "Идентификатор турбины; пусто — по обеим турбинам", required = false) turbineId: String?,
+        @ToolParam(description = "Начало периода, yyyy-MM-dd; пусто — начало теста", required = false) from: String?,
+        @ToolParam(description = "Конец периода включительно, yyyy-MM-dd; пусто — конец теста", required = false) to: String?,
         ctx: ToolContext,
-    ): MetricsResponse {
+    ): AgentMetricsView {
         val id = turbineId?.takeIf { it.isNotBlank() }
         return traced(ctx, "getMetrics", mapOf("turbineId" to id, "from" to from, "to" to to)) {
-            mock.metrics(id, LocalDate.parse(from), LocalDate.parse(to))
+            val period = metrics.period() ?: throw IllegalStateException("Нет данных отложенного теста")
+            val f = from?.takeIf { it.isNotBlank() }?.let { parseDate(it) } ?: period.first
+            val t = to?.takeIf { it.isNotBlank() }?.let { parseDate(it) } ?: period.second
+            metricsView(metrics.metrics(id, f, t))
         }
     }
 
@@ -166,6 +173,40 @@ class AgentTools(
         const val TRACE_KEY = "trace"
         private const val MAX_WEATHER_DAYS = 3
     }
+}
+
+/** Метрики готовыми фразами: 31 день и 48 часов горизонта в JSON не нужны модели и съедают контекст. */
+data class AgentMetricsView(val turbineId: String?, val period: String, val conclusions: List<String>)
+
+internal fun metricsView(m: MetricsResponse): AgentMetricsView {
+    val lines = buildList {
+        add("Период теста ${m.periodFrom}…${m.periodTo} (${m.sampleHours} ч), прогноз на следующие сутки: средняя ошибка (MAE) " +
+            "${pct(m.mae)} номинала, RMSE ${pct(m.rmse)}.")
+        m.bias?.let {
+            add(if (it > 0.02) "Модель в среднем ЗАВЫШАЕТ выработку на ${pct(it)} номинала."
+                else if (it < -0.02) "Модель в среднем ЗАНИЖАЕТ выработку на ${pct(-it)} номинала."
+                else "Систематического смещения почти нет (${pct(it)}).")
+        }
+        m.baselineMae?.let { add(compareLine("«мощность как в момент прогноза»", it, m.mae)) }
+        m.powerCurveBaselineMae?.let { add(compareLine("«кривая мощности без ML»", it, m.mae)) }
+        m.intervalCoverage?.let { add("Интервал P10–P90 накрыл факт в ${pct(it)} часов (ожидается около 80 %).") }
+        m.byDay.maxByOrNull { it.mae }?.let { worst ->
+            val best = m.byDay.minBy { it.mae }
+            add("Лучший день ${best.date} (MAE ${pct(best.mae)}), худший ${worst.date} (MAE ${pct(worst.mae)}).")
+        }
+        if (m.byLeadTime.size >= 48) {
+            val d1 = m.byLeadTime.filter { it.leadHour <= 24 }.map { it.mae }.average()
+            val d2 = m.byLeadTime.filter { it.leadHour > 24 }.map { it.mae }.average()
+            add("Ошибка на первых сутках горизонта ${pct(d1)}, на вторых ${pct(d2)}.")
+        }
+    }
+    return AgentMetricsView(m.turbineId, "${m.periodFrom}…${m.periodTo}", lines)
+}
+
+private fun compareLine(name: String, baseline: Double, mae: Double): String {
+    val diff = baseline - mae
+    return if (diff > 0) "Бейзлайн $name: MAE ${pct(baseline)} — модель точнее на ${pct(diff)} номинала (в ${"%.1f".format(baseline / mae)} раза)."
+    else "Бейзлайн $name: MAE ${pct(baseline)} — модель НЕ лучше этого бейзлайна."
 }
 
 /** Версии прогноза на день — готовыми фразами в местном времени (сырые UTC-метки модель подписывает наугад). */
