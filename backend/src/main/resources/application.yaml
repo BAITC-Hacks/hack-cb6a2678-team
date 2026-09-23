@@ -1,3 +1,12 @@
 spring:
   application:
     name: backend
+
+server:
+  port: 8080
+
+# Swagger UI показывает контракт из static/openapi.yaml (источник правды для фронта)
+springdoc:
+  swagger-ui:
+    url: /openapi.yaml
+    path: /swagger-ui.html

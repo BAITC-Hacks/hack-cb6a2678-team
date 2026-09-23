@@ -1,0 +1,40 @@
+package com.ybkuanysh.backend.api
+
+import com.ybkuanysh.backend.dto.ErrorResponse
+import com.ybkuanysh.backend.mock.NotFoundException
+import org.springframework.http.HttpStatus
+import org.springframework.http.converter.HttpMessageNotReadableException
+import org.springframework.web.bind.MissingServletRequestParameterException
+import org.springframework.web.bind.annotation.ExceptionHandler
+import org.springframework.web.bind.annotation.ResponseStatus
+import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
+
+class BadRequestException(message: String) : RuntimeException(message)
+
+@RestControllerAdvice
+class ErrorHandler {
+
+    @ExceptionHandler(NotFoundException::class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    fun notFound(e: NotFoundException) = ErrorResponse(e.message ?: "Not found")
+
+    @ExceptionHandler(BadRequestException::class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    fun badRequest(e: BadRequestException) = ErrorResponse(e.message ?: "Bad request")
+
+    @ExceptionHandler(MissingServletRequestParameterException::class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    fun missingParam(e: MissingServletRequestParameterException) =
+        ErrorResponse("Missing required parameter '${e.parameterName}'")
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException::class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    fun typeMismatch(e: MethodArgumentTypeMismatchException) =
+        ErrorResponse("Invalid value '${e.value}' for parameter '${e.name}'")
+
+    @ExceptionHandler(HttpMessageNotReadableException::class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    fun unreadableBody(e: HttpMessageNotReadableException) =
+        ErrorResponse("Invalid request body: turbineId and date (yyyy-MM-dd) are required")
+}
