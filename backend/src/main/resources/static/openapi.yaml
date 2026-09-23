@@ -40,6 +40,8 @@ tags:
     description: Метрики качества модели
   - name: AgentLog
     description: Лог шагов автономного агента
+  - name: Weather
+    description: Архивные прогнозы погоды Open-Meteo (служебный эндпоинт, источник данных для агента)
   - name: Agent
     description: LLM-агент (Spring AI + Ollama) с инструментами над данными ВЭС
 
@@ -126,8 +128,8 @@ paths:
                 forecastIssuedAt: "2026-02-01T00:00:00Z"
                 revision: 1
                 horizonHours: 48
-                weatherSource: "open-meteo:ecmwf_ifs025"
-                weatherIssuedAt: "2026-01-31T18:00:00Z"
+                weatherSource: "open-meteo:ecmwf_ifs"
+                weatherIssuedAt: "2026-01-31T12:00:00Z"
                 modelVersion: "lgbm-v1"
                 summary:
                   meanPower: 0.412
@@ -186,12 +188,12 @@ paths:
                 revisions:
                   - revision: 1
                     forecastIssuedAt: "2026-02-01T00:00:00Z"
-                    weatherIssuedAt: "2026-01-31T18:00:00Z"
+                    weatherIssuedAt: "2026-01-31T12:00:00Z"
                     meanPower: 0.412
                     changeVsPreviousPct: null
                   - revision: 2
                     forecastIssuedAt: "2026-02-01T06:00:00Z"
-                    weatherIssuedAt: "2026-02-01T00:00:00Z"
+                    weatherIssuedAt: "2026-01-31T18:00:00Z"
                     meanPower: 0.379
                     changeVsPreviousPct: -8.0
         '400':
@@ -309,9 +311,9 @@ paths:
                   - stepName: "Получение прогноза погоды"
                     status: "success"
                     timestamp: "2026-02-01T00:00:05Z"
-                    details: "open-meteo:ecmwf_ifs025, прогон от 2026-01-31T18:00:00Z"
+                    details: "open-meteo:ecmwf_ifs, прогон от 2026-01-31T12:00:00Z"
                     tool: "fetchWeather"
-                    dataIssuedAt: "2026-01-31T18:00:00Z"
+                    dataIssuedAt: "2026-01-31T12:00:00Z"
                   - stepName: "Запуск модели прогнозирования"
                     status: "success"
                     timestamp: "2026-02-01T00:00:12Z"
@@ -322,6 +324,54 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  /api/weather:
+    get:
+      tags: [Weather]
+      summary: Прогноз погоды, известный в заданный момент
+      description: >
+        Берёт последний прогон модели погоды (по умолчанию ECMWF IFS HRES 9 км,
+        Open-Meteo Single Runs API), опубликованный не позже `at`, и отдаёт часы
+        (`at`, `at` + horizonHours]. Прогон считается опубликованным через
+        `publication-delay` (7 ч) после инициализации. Если прогон недоступен или
+        неполный — берётся более старый, пропущенные перечислены в `skippedRuns`.
+        Ответы кэшируются в `data/weather-cache/`.
+      operationId: getWeather
+      parameters:
+        - $ref: '#/components/parameters/TurbineId'
+        - name: at
+          in: query
+          required: true
+          description: Момент прогноза, UTC
+          schema:
+            type: string
+            format: date-time
+          example: "2026-02-01T00:00:00Z"
+        - name: horizonHours
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 72
+            default: 48
+      responses:
+        '200':
+          description: Почасовой прогноз погоды
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeatherResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: Нет доступного прогона (Open-Meteo недоступен, прогона нет в архиве или offline без кэша)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/agent/chat:
     post:
@@ -574,12 +624,14 @@ components:
         weatherSource:
           type: string
           description: Источник и модель прогноза погоды
-          example: "open-meteo:ecmwf_ifs025"
+          example: "open-meteo:ecmwf_ifs"
         weatherIssuedAt:
           type: string
           format: date-time
-          description: Время выпуска использованного прогноза погоды (≤ forecastIssuedAt)
-          example: "2026-01-31T18:00:00Z"
+          description: >
+            Время инициализации использованного прогона погоды. Прогон опубликован
+            через ~7 ч после инициализации, и эта публикация — не позже forecastIssuedAt.
+          example: "2026-01-31T12:00:00Z"
         modelVersion:
           type: string
           example: "lgbm-v1"
@@ -777,7 +829,7 @@ components:
           format: date-time
           nullable: true
           description: Время выпуска использованных внешних данных (для проверки на утечку)
-          example: "2026-01-31T18:00:00Z"
+          example: "2026-01-31T12:00:00Z"
 
     AgentLogResponse:
       type: object
@@ -842,6 +894,109 @@ components:
         durationMs:
           type: integer
           format: int64
+
+    WeatherHour:
+      type: object
+      description: Час прогноза погоды; поля совпадают с WeatherHour в contracts/ml-service.openapi.yaml
+      required: [timestamp]
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        windSpeed10m:
+          type: number
+          nullable: true
+          description: м/с
+        windSpeed80m:
+          type: number
+          nullable: true
+          description: м/с
+        windSpeed100m:
+          type: number
+          nullable: true
+          description: м/с
+        windSpeed120m:
+          type: number
+          nullable: true
+          description: м/с
+        windDirection100m:
+          type: number
+          nullable: true
+          description: градусы
+        windGusts10m:
+          type: number
+          nullable: true
+          description: м/с
+        temperature2m:
+          type: number
+          nullable: true
+          description: °C
+        relativeHumidity2m:
+          type: number
+          nullable: true
+          description: "%"
+        surfacePressure:
+          type: number
+          nullable: true
+          description: гПа
+
+    WeatherForecast:
+      type: object
+      required: [model, forecastAt, runInitAt, runAvailableAt, gridLat, gridLon, elevation, source, skippedRuns, hours]
+      properties:
+        model:
+          type: string
+          example: "ecmwf_ifs"
+        forecastAt:
+          type: string
+          format: date-time
+          example: "2026-02-01T00:00:00Z"
+        runInitAt:
+          type: string
+          format: date-time
+          description: Время инициализации использованного прогона (это weatherIssuedAt прогноза мощности)
+          example: "2026-01-31T12:00:00Z"
+        runAvailableAt:
+          type: string
+          format: date-time
+          description: Когда прогон считается опубликованным; всегда ≤ forecastAt
+          example: "2026-01-31T19:00:00Z"
+        gridLat:
+          type: number
+          description: Широта узла сетки модели, ближайшего к турбине
+        gridLon:
+          type: number
+        elevation:
+          type: number
+          description: Высота узла сетки, м
+        source:
+          type: string
+          enum: [cache, api]
+        skippedRuns:
+          type: array
+          items:
+            type: object
+            required: [runInitAt, reason]
+            properties:
+              runInitAt:
+                type: string
+                format: date-time
+              reason:
+                type: string
+        hours:
+          type: array
+          items:
+            $ref: '#/components/schemas/WeatherHour'
+
+    WeatherResponse:
+      type: object
+      required: [turbineId, forecast]
+      properties:
+        turbineId:
+          type: string
+          example: "t1"
+        forecast:
+          $ref: '#/components/schemas/WeatherForecast'
 
     ErrorResponse:
       type: object

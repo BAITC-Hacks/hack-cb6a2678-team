@@ -15,6 +15,12 @@ backend/src/main/kotlin/com/ybkuanysh/backend/
 │  ├─ AgentService.kt       — ChatClient, системный промпт, журнал вызовов
 │  └─ AgentTools.kt         — инструменты агента (@Tool) + компактный вид прогноза для LLM
 ├─ config/WebConfig.kt      — CORS для /api/**, бин Clock
+├─ weather/
+│  ├─ WeatherService.kt     — выбор прогона, опубликованного ≤ T; фолбэк на старые прогоны; файловый кэш
+│  ├─ OpenMeteoClient.kt    — HTTP к Single Runs API, разбор ответа
+│  ├─ WeatherController.kt  — GET /api/weather (служебный, для отладки и агента)
+│  ├─ WeatherModels.kt      — WeatherHour (как в ML-контракте), WeatherRun, WeatherForecast, исключения
+│  └─ WeatherProperties.kt  — настройки weather.*
 ├─ dto/Dto.kt               — все DTO публичного API
 └─ mock/MockDataService.kt  — детерминированные моки (будут заменены реальными сервисами)
 
@@ -39,6 +45,10 @@ open http://localhost:8080/swagger-ui.html
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | адрес Ollama |
 | `OLLAMA_MODEL` | `qwen3:8b` | модель; нужна поддержка tool calling |
 | `OLLAMA_PULL_STRATEGY` | `never` | `when_missing` — бэкенд сам скачает модель при старте |
+| `WEATHER_MODEL` | `ecmwf_ifs` | модель Open-Meteo |
+| `WEATHER_PUBLICATION_DELAY` | `7h` | через сколько после инициализации прогон считается опубликованным |
+| `WEATHER_CACHE_DIR` | `../data/weather-cache` | кэш ответов (путь от `backend/`) |
+| `WEATHER_OFFLINE` | `false` | `true` — только кэш, без сети |
 
 Важные настройки в `application.yaml` и почему они такие:
 
@@ -74,6 +84,18 @@ fun myTool(
 - Момент прогноза `T` (когда появится реальный цикл) подставлять из кода, не принимать от LLM.
 - Даты от LLM — строки `yyyy-MM-dd`, парсить в инструменте.
 
+## Погода
+
+`WeatherService.forecastAt(lat, lon, T, horizonHours)`:
+
+1. `latestAvailableRun(T)` — последний прогон с `init + publicationDelay ≤ T`.
+2. Берёт его из кэша или Open-Meteo, оставляет часы `(T, T + horizon]`.
+3. Если прогон недоступен или в нём нет полного горизонта — пробует на 6 ч старше (до `maxFallbackRuns`).
+4. Любая попытка взять прогон, опубликованный после `T`, — `LeakageException` (баг, не ретраится).
+
+Проверить: `GET /api/weather?turbineId=t1&at=2026-02-01T00:00:00Z`. Тесты — `WeatherServiceTests` (без сети,
+включая проверку «ни одного часа и прогона из будущего» по всему февралю).
+
 ## Как менять API
 
 1. Правка `static/openapi.yaml` (новые поля — `nullable`, не ломать фронт).
@@ -83,7 +105,7 @@ fun myTool(
 
 ## Что дальше (см. `roadmap.md`)
 
-1. Клиент Open-Meteo с защитой от утечки (`T` → только прогоны, опубликованные ≤ `T`) и файловым кэшем.
+1. Заполнить кэш погоды за весь backtest и закоммитить.
 2. HTTP-клиент к ML-сервису по `contracts/ml-service.openapi.yaml`.
 3. Реальный цикл агента на `POST /forecast/run` с записью шагов в `agent-log`.
 4. Backtest-раннер и хранилище; замена `MockDataService` реальными сервисами без изменения API.
@@ -92,4 +114,5 @@ fun myTool(
 
 - Jackson 3: импорты `tools.jackson.*`. В тестах `JsonNode` — через индекс (`node[i]`), `doubleValue()`.
 - Swagger показывает статический `openapi.yaml`: новый эндпоинт без записи там не виден.
+- `@ConfigurationProperties` с полем `Path` и значением `../...` не биндится (Spring считает это ресурсом веб-приложения) — храните путь строкой.
 - Ollama в Docker на macOS — только CPU (медленно). Для разработки — нативный `brew install ollama`.

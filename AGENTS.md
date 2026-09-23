@@ -30,6 +30,7 @@ docker-compose.yml          — Ollama + загрузка модели (позж
 contracts/ml-service.openapi.yaml       — контракт ML-сервиса (бэкенд ↔ ML)
 backend/src/main/resources/static/openapi.yaml — контракт публичного API (фронт ↔ бэкенд), источник правды
 backend/                    — Spring Boot 4.1, Kotlin 2.3, Spring AI 2.0.1, Java toolchain 17
+data/weather-cache/         — кэш ответов Open-Meteo (коммитится — офлайн-воспроизводимость)
 docs/                       — документация
 ```
 
@@ -37,7 +38,9 @@ docs/                       — документация
 
 - Публичный API v1.1 описан и **отдаёт моки** (`backend/.../mock/MockDataService.kt`) — детерминированные синтетические данные.
 - LLM-агент работает: `POST /api/agent/chat`, Spring AI + Ollama (`qwen3:8b`), инструменты поверх моков.
-- Не сделано: загрузка реальной погоды (Open-Meteo), ML-сервис, реальный цикл агента, backtest, фронтенд.
+- Клиент погоды работает: `backend/.../weather/`, `GET /api/weather` — реальные архивные прогнозы ECMWF IFS
+  (Open-Meteo Single Runs API) с защитой от утечки и кэшем в `data/weather-cache/`. К агенту пока не подключён.
+- Не сделано: ML-сервис, реальный цикл агента, backtest, фронтенд.
 - План и статус этапов — `docs/roadmap.md`.
 
 ## Команды

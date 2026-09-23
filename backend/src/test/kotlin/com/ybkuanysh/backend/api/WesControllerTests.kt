@@ -100,7 +100,7 @@ class WesControllerTests(@Autowired val mvc: MockMvc) {
             jsonPath("$.steps.length()") { value(5) }
             jsonPath("$.steps[0].status") { value("success") }
             jsonPath("$.steps[0].tool") { value("fetchWeather") }
-            jsonPath("$.steps[0].dataIssuedAt") { value("2026-01-31T18:00:00Z") }
+            jsonPath("$.steps[0].dataIssuedAt") { value("2026-01-31T12:00:00Z") }
         }
         mvc.get("/api/agent-log?date=2026-02-01&revision=3").andExpect {
             jsonPath("$.forecastIssuedAt") { value("2026-02-01T12:00:00Z") }
@@ -147,7 +147,7 @@ class WesControllerTests(@Autowired val mvc: MockMvc) {
             status { isOk() }
             jsonPath("$.revision") { value(2) }
             jsonPath("$.forecastIssuedAt") { value("2026-02-05T06:00:00Z") }
-            jsonPath("$.weatherIssuedAt") { value("2026-02-05T00:00:00Z") }
+            jsonPath("$.weatherIssuedAt") { value("2026-02-04T18:00:00Z") }
             jsonPath("$.points[0].timestamp") { value("2026-02-05T07:00:00Z") }
             jsonPath("$.summary.meanPower") { isNumber() }
             jsonPath("$.alerts") { isArray() }

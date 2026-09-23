@@ -1,5 +1,6 @@
 package com.ybkuanysh.backend.dto
 
+import com.ybkuanysh.backend.weather.WeatherForecast
 import java.time.Instant
 import java.time.LocalDate
 
@@ -132,6 +133,11 @@ data class RunForecastRequest(
 data class RunForecastResponse(
     val cycleId: String,
     val status: String,
+)
+
+data class WeatherResponse(
+    val turbineId: String,
+    val forecast: WeatherForecast,
 )
 
 data class ErrorResponse(

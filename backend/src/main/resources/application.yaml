@@ -24,6 +24,13 @@ spring:
       # Локальная LLM на CPU может отвечать минутами
       read-timeout: 5m
 
+weather:
+  model: ${WEATHER_MODEL:ecmwf_ifs}
+  publication-delay: ${WEATHER_PUBLICATION_DELAY:7h}
+  # Путь относительно backend/ (рабочая папка bootRun); кэш коммитится в репозиторий
+  cache-dir: ${WEATHER_CACHE_DIR:../data/weather-cache}
+  offline: ${WEATHER_OFFLINE:false}
+
 server:
   port: 8080
 

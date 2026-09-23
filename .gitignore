@@ -1,4 +1,5 @@
 # Секреты (ключи NVIDIA/OpenAI с хакатона) — никогда не коммитить
+.idea
 .env
 .env.*
 !.env.example

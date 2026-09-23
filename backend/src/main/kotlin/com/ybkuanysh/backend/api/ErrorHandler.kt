@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.client.ResourceAccessException
+import com.ybkuanysh.backend.weather.WeatherUnavailableException
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
 
 class BadRequestException(message: String) : RuntimeException(message)
@@ -43,4 +44,8 @@ class ErrorHandler {
     @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
     fun llmUnavailable(e: ResourceAccessException) =
         ErrorResponse("LLM is unavailable (is Ollama running?): ${e.message}")
+
+    @ExceptionHandler(WeatherUnavailableException::class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    fun weatherUnavailable(e: WeatherUnavailableException) = ErrorResponse(e.message ?: "Weather unavailable")
 }

@@ -16,6 +16,7 @@ import com.ybkuanysh.backend.dto.LeadTimeMetric
 import com.ybkuanysh.backend.dto.MetricsResponse
 import com.ybkuanysh.backend.dto.RunForecastResponse
 import com.ybkuanysh.backend.dto.Turbine
+import com.ybkuanysh.backend.weather.WeatherService
 import org.springframework.stereotype.Service
 import java.time.Clock
 import java.time.Duration
@@ -40,7 +41,7 @@ class NotFoundException(message: String) : RuntimeException(message)
  * Погода и факт зависят только от (турбина, час), поэтому прогнозы с разных дат согласованы между собой.
  */
 @Service
-class MockDataService(private val clock: Clock) {
+class MockDataService(private val clock: Clock, private val weather: WeatherService) {
 
     val turbines = listOf(
         // Координаты из ТЗ (ссылки Google Maps)
@@ -56,7 +57,7 @@ class MockDataService(private val clock: Clock) {
     fun forecast(turbineId: String, date: LocalDate, horizonHours: Int, revision: Int = 1): ForecastResponse {
         requireTurbine(turbineId)
         val issuedAt = issuedAt(date, revision)
-        val weatherIssuedAt = issuedAt.minus(WEATHER_PUBLICATION_LAG)
+        val weatherIssuedAt = weather.latestAvailableRun(issuedAt)
         val points = (1..horizonHours).map { lead ->
             val ts = issuedAt.plus(lead.toLong(), ChronoUnit.HOURS)
             // Ошибка прогноза ветра растёт с заблаговременностью от выпуска погодного прогона
@@ -259,7 +260,7 @@ class MockDataService(private val clock: Clock) {
     /** Плановый цикл в момент ревизии. Раз в неделю — ретрай получения погоды, чтобы фронт видел статус retrying. */
     private fun scheduledLog(date: LocalDate, turbineId: String?, revision: Int): AgentLogResponse {
         val start = issuedAt(date, revision)
-        val weatherIssuedAt = start.minus(WEATHER_PUBLICATION_LAG)
+        val weatherIssuedAt = weather.latestAvailableRun(start)
         val turbineCount = if (turbineId != null) 1 else turbines.size
         val templates = stepTemplates(48, turbineCount, weatherIssuedAt)
         val withRetry = date.dayOfMonth % 7 == 3
@@ -282,7 +283,7 @@ class MockDataService(private val clock: Clock) {
     /** Ручной запуск: шаги «проходят» по одному каждые STEP_DURATION — удобно для поллинга с фронта. */
     private fun manualLog(run: ManualRun): AgentLogResponse {
         val issuedAt = issuedAt(run.date, 1)
-        val weatherIssuedAt = issuedAt.minus(WEATHER_PUBLICATION_LAG)
+        val weatherIssuedAt = weather.latestAvailableRun(issuedAt)
         val elapsed = Duration.between(run.startedAt, clock.instant())
         val done = (elapsed.toMillis() / STEP_DURATION.toMillis()).toInt()
         val steps = stepTemplates(run.horizonHours, 1, weatherIssuedAt).take(done + 1).mapIndexed { i, tpl ->
@@ -348,10 +349,7 @@ class MockDataService(private val clock: Clock) {
         const val REVISIONS_PER_DAY = 4
         val REVISION_STEP: Duration = Duration.ofHours(6)
 
-        /** Прогон погоды публикуется с задержкой, поэтому в момент T доступен только прогон, стартовавший в T − 6 ч. */
-        val WEATHER_PUBLICATION_LAG: Duration = Duration.ofHours(6)
-
-        const val WEATHER_SOURCE = "open-meteo:ecmwf_ifs025"
+        const val WEATHER_SOURCE = "open-meteo:ecmwf_ifs"
         const val MODEL_VERSION = "mock-v0"
 
         private const val Z80 = 1.2816 // квантиль N(0,1) для интервала P10–P90
