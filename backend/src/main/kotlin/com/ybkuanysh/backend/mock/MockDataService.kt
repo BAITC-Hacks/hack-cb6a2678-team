@@ -43,8 +43,9 @@ class NotFoundException(message: String) : RuntimeException(message)
 class MockDataService(private val clock: Clock) {
 
     val turbines = listOf(
-        Turbine("t1", "Турбина 1", 43.2380, 76.9450),
-        Turbine("t2", "Турбина 2", 43.2415, 76.9502),
+        // Координаты из ТЗ (ссылки Google Maps)
+        Turbine("t1", "Турбина 1", 43.645150, 78.535604),
+        Turbine("t2", "Турбина 2", 43.643198, 78.538828),
     )
 
     private val manualRuns = ConcurrentHashMap<String, ManualRun>()

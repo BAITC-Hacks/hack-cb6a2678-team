@@ -24,7 +24,7 @@ class WesControllerTests(@Autowired val mvc: MockMvc) {
             status { isOk() }
             jsonPath("$.length()") { value(2) }
             jsonPath("$[0].id") { value("t1") }
-            jsonPath("$[0].lat") { value(43.2380) }
+            jsonPath("$[0].lat") { value(43.645150) }
         }
     }
 

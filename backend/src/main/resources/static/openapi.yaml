@@ -78,12 +78,12 @@ paths:
               example:
                 - id: "t1"
                   name: "Турбина 1"
-                  lat: 43.2380
-                  lon: 76.9450
+                  lat: 43.645150
+                  lon: 78.535604
                 - id: "t2"
                   name: "Турбина 2"
-                  lat: 43.2415
-                  lon: 76.9502
+                  lat: 43.643198
+                  lon: 78.538828
 
   /api/forecast:
     get:
@@ -447,11 +447,11 @@ components:
         lat:
           type: number
           format: double
-          example: 43.2380
+          example: 43.645150
         lon:
           type: number
           format: double
-          example: 76.9450
+          example: 78.535604
 
     ForecastPoint:
       type: object

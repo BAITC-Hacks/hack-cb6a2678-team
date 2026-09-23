@@ -1,6 +1,9 @@
 # hack-cb6a2678-team
 Hackathon team repository for Во имя Омниссии!
 
+Agentic AI-система почасового прогноза выработки ВЭС на 24–48 ч (кейс HackAlem AI).
+Документация — [`docs/`](docs/README.md), контекст для Claude Code / Codex — [`AGENTS.md`](AGENTS.md).
+
 ## Backend (моки API)
 
 Бэкенд сейчас отдаёт детерминированные моки по контракту `backend/src/main/resources/static/openapi.yaml`.
