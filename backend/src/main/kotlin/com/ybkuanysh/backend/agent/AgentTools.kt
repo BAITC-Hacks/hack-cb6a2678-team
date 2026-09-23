@@ -25,13 +25,14 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 /** Компактный вид прогноза для LLM: полный JSON на 48 точек съедает контекст локальной модели. */
+/**
+ * Без сырых меток времени в UTC и JSON-сводки: модель брала время оттуда и подписывала его как местное.
+ * Всё время — только в готовых фразах и почасовых строках, по местному времени.
+ */
 data class AgentForecastView(
     val turbineId: String,
-    val forecastIssuedAt: Instant,
-    val weatherIssuedAt: Instant,
     val modelVersion: String,
     val conclusions: List<String>,
-    val summary: ForecastSummary,
     val hourlyFormat: String?,
     val hourly: List<String>?,
 )
@@ -57,7 +58,7 @@ class AgentTools(
         description = "Прогноз выработки турбины (ML-модель) на календарные дни по местному времени. Прогноз выпускается накануне первого " +
             "дня в 12:00 местного времени (как прогноз на сутки вперёд), мощность нормализована 0..1. " +
             "conclusions — готовые выводы по каждому дню и предупреждения: отвечай по ним. " +
-            "summary — итоги числами за весь запрошенный период. Почасовые строки hourly — только при detailed=true.",
+            "Почасовые строки hourly — только при detailed=true.",
     )
     fun getForecast(
         @ToolParam(description = "Идентификатор турбины, например t1") turbineId: String,
@@ -147,11 +148,8 @@ class AgentTools(
 
     private fun compact(fc: ForecastResponse, detailed: Boolean) = AgentForecastView(
         turbineId = fc.turbineId,
-        forecastIssuedAt = fc.forecastIssuedAt,
-        weatherIssuedAt = fc.weatherIssuedAt,
         modelVersion = fc.modelVersion,
         conclusions = forecastConclusions(fc, zone),
-        summary = fc.summary,
         hourlyFormat = if (detailed) "время (${zoneLabel(zone)}) | прогноз | P10–P90 | ветер м/с | температура °C" else null,
         hourly = if (!detailed) null else fc.points.map {
             "${hourFormat(zone).format(it.timestamp)} | ${it.predictedPower} | ${it.p10}–${it.p90} | ${it.windSpeed ?: "-"} | ${it.temperature ?: "-"}"

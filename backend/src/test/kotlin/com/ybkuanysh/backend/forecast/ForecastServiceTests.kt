@@ -86,7 +86,7 @@ class ForecastServiceTests {
                 weatherIssuedBeforeUtc = "2026-01-30T12:00:00Z",
                 modelVersion = "lgbm-test",
                 hourly = r.hourly.mapIndexed { i, h ->
-                    h.copy(timeUtc = Instant.parse("2026-01-31T18:00:00Z").plusSeconds(3600L * i).toString(), windSpeed100m = 11.0, temperature2m = 1.5)
+                    h.copy(timeUtc = Instant.parse("2026-01-31T18:00:00Z").plusSeconds(3600L * i).toString(), windSpeed100m = 11.04, temperature2m = 1.53)
                 },
             )
         }
@@ -95,7 +95,7 @@ class ForecastServiceTests {
         assertEquals(Instant.parse("2026-01-30T12:00:00Z"), fc.weatherIssuedAt)
         assertEquals("lgbm-test", fc.modelVersion)
         assertEquals(Instant.parse("2026-01-31T18:00:00Z"), fc.points.first().timestamp)
-        assertTrue(fc.points.all { it.windSpeed == 11.0 && it.temperature == 1.5 })
+        assertTrue(fc.points.all { it.windSpeed == 11.0 && it.temperature == 1.5 })  // округление до 0.1
     }
 
     @Test

@@ -8,17 +8,16 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import kotlin.math.round
 
-/** Компактный вид прогноза погоды для LLM: готовые итоги + по строке на час. */
+/**
+ * Компактный вид прогноза погоды для LLM: готовые выводы + по строке на час, всё время — местное.
+ * Сырых меток UTC и JSON-сводки нет: модель брала время оттуда и подписывала его как местное.
+ */
 data class AgentWeatherView(
     val turbineId: String,
-    val forecastAt: Instant,
     val model: String,
-    val runInitAt: Instant,
-    val runPublishedAt: Instant,
     val skippedRuns: List<String>,
     /** Готовые выводы на русском — маленькая LLM пересказывает их, а не делает выводы сама. */
     val conclusions: List<String>,
-    val summary: WeatherSummary,
     val hourlyFormat: String?,
     val hourly: List<String>?,
 )
@@ -55,14 +54,15 @@ fun WeatherForecast.toAgentView(turbineId: String, detailed: Boolean, zone: Zone
     val days = hours.groupBy { dayOf(it, zone) }
     return AgentWeatherView(
         turbineId = turbineId,
-        forecastAt = forecastAt,
         model = model,
-        runInitAt = runInitAt,
-        runPublishedAt = runAvailableAt,
-        skippedRuns = skippedRuns.map { "${it.runInitAt}: ${it.reason}" },
+        skippedRuns = skippedRuns.map { "${hour.format(it.runInitAt)}: ${it.reason}" },
         // Итог за период — только если дней несколько: иначе модель путает его со строкой дня
-        conclusions = dailyConclusions(hours, zone) + if (days.size > 1) periodConclusions(summary, days.keys, zone) else emptyList(),
-        summary = summary,
+        conclusions = dailyConclusions(hours, zone) +
+            (if (days.size > 1) periodConclusions(summary, days.keys, zone) else emptyList()) +
+            (
+                "Прогноз погоды $model: прогон от ${hour.format(runInitAt)}, опубликован к ${hour.format(runAvailableAt)} " +
+                    "${zoneLabel(zone)} — известен на момент ${hour.format(forecastAt)}."
+            ),
         hourlyFormat = if (detailed) "время (${zoneLabel(zone)}) | ветер 100 м, м/с | порывы 10 м, м/с | направление ° | температура °C | влажность %" else null,
         hourly = if (!detailed) null else hours.map {
             "${hour.format(it.timestamp)} | ${it.windSpeed100m ?: "-"} | ${it.windGusts10m ?: "-"} | " +

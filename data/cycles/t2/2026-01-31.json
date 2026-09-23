@@ -1,0 +1,505 @@
+{
+  "cycleId" : "cycle_t2_2026-01-31_1790166106",
+  "turbineId" : "t2",
+  "issueDate" : "2026-01-31",
+  "horizonHours" : 48,
+  "status" : "success",
+  "startedAt" : "2026-09-23T12:21:46.316150Z",
+  "finishedAt" : "2026-09-23T12:21:54.880276Z",
+  "steps" : [ {
+    "stepName" : "Погода у турбины",
+    "status" : "success",
+    "timestamp" : "2026-09-23T12:21:46.316214Z",
+    "details" : "Open-Meteo ecmwf_ifs, прогон от 31.01 05:00, опубликован к 31.01 12:00 — не позже момента прогноза 31.01 12:00",
+    "tool" : "fetchWeather",
+    "dataIssuedAt" : "2026-01-31T00:00:00Z"
+  }, {
+    "stepName" : "Прогноз ML",
+    "status" : "success",
+    "timestamp" : "2026-09-23T12:21:46.320274Z",
+    "details" : "Модель lgbm-0d713e942bf918b8: 48 ч, погода open-meteo-previous-runs:ecmwf_ifs025+gfs_seamless+icon_seamless выпущена не позже 30.01 23:00",
+    "tool" : "predict",
+    "dataIssuedAt" : "2026-01-30T18:00:00Z"
+  }, {
+    "stepName" : "Проверка прогноза",
+    "status" : "success",
+    "timestamp" : "2026-09-23T12:21:46.390098Z",
+    "details" : "Все проверки пройдены: 48 ч подряд, мощность в 0..1, p10 ≤ прогноз ≤ p90, погода не из будущего",
+    "tool" : "validate",
+    "dataIssuedAt" : null
+  }, {
+    "stepName" : "Сравнение с предыдущим выпуском",
+    "status" : "success",
+    "timestamp" : "2026-09-23T12:21:46.390147Z",
+    "details" : "Сутки 01.02: было 13 % номинала (выпуск 2026-01-30), стало 17 % (+4 %) — изменение небольшое, прогноз подтверждён.",
+    "tool" : "compareWithPrevious",
+    "dataIssuedAt" : null
+  }, {
+    "stepName" : "Отчёт для диспетчера",
+    "status" : "success",
+    "timestamp" : "2026-09-23T12:21:46.435650Z",
+    "details" : "Отчёт написан LLM и прошёл самопроверку: все времена и проценты есть в данных",
+    "tool" : "llm",
+    "dataIssuedAt" : null
+  }, {
+    "stepName" : "Сохранение",
+    "status" : "success",
+    "timestamp" : "2026-09-23T12:21:54.880249Z",
+    "details" : "Прогноз сохранён: 48 ч, предупреждений 8",
+    "tool" : "saveForecast",
+    "dataIssuedAt" : null
+  } ],
+  "forecast" : {
+    "turbineId" : "t2",
+    "forecastIssuedAt" : "2026-01-31T07:00:00Z",
+    "revision" : 1,
+    "horizonHours" : 48,
+    "weatherSource" : "open-meteo-previous-runs:ecmwf_ifs025+gfs_seamless+icon_seamless",
+    "weatherIssuedAt" : "2026-01-30T18:00:00Z",
+    "modelVersion" : "lgbm-0d713e942bf918b8",
+    "summary" : {
+      "meanPower" : 0.316,
+      "minPower" : 0.0,
+      "maxPower" : 0.922,
+      "maxPowerAt" : "2026-02-02T09:00:00Z",
+      "fullLoadHours" : 15.2,
+      "lowPowerHours" : 10
+    },
+    "alerts" : [ {
+      "type" : "ramp_up",
+      "severity" : "info",
+      "from" : "2026-02-01T09:00:00Z",
+      "to" : "2026-02-01T09:00:00Z",
+      "message" : "Резкий рост выработки (≥ 0.3 за 3 ч)"
+    }, {
+      "type" : "icing",
+      "severity" : "warning",
+      "from" : "2026-02-01T13:00:00Z",
+      "to" : "2026-02-01T19:00:00Z",
+      "message" : "Риск обледенения лопастей: температура около 0 °C"
+    }, {
+      "type" : "icing",
+      "severity" : "warning",
+      "from" : "2026-02-02T00:00:00Z",
+      "to" : "2026-02-02T04:00:00Z",
+      "message" : "Риск обледенения лопастей: температура около 0 °C"
+    }, {
+      "type" : "ramp_up",
+      "severity" : "info",
+      "from" : "2026-02-02T00:00:00Z",
+      "to" : "2026-02-02T01:00:00Z",
+      "message" : "Резкий рост выработки (≥ 0.3 за 3 ч)"
+    }, {
+      "type" : "ramp_up",
+      "severity" : "info",
+      "from" : "2026-02-02T07:00:00Z",
+      "to" : "2026-02-02T07:00:00Z",
+      "message" : "Резкий рост выработки (≥ 0.3 за 3 ч)"
+    }, {
+      "type" : "ramp_down",
+      "severity" : "warning",
+      "from" : "2026-02-02T13:00:00Z",
+      "to" : "2026-02-02T13:00:00Z",
+      "message" : "Резкий спад выработки (≥ 0.3 за 3 ч)"
+    }, {
+      "type" : "icing",
+      "severity" : "warning",
+      "from" : "2026-02-02T14:00:00Z",
+      "to" : "2026-02-02T18:00:00Z",
+      "message" : "Риск обледенения лопастей: температура около 0 °C"
+    }, {
+      "type" : "ramp_down",
+      "severity" : "warning",
+      "from" : "2026-02-02T15:00:00Z",
+      "to" : "2026-02-02T15:00:00Z",
+      "message" : "Резкий спад выработки (≥ 0.3 за 3 ч)"
+    } ],
+    "agentReport" : "01.02.2026 турбина будет работать в среднем на 17 % номинала с пиком 45 % в 01.02 14:00 местного времени, 02.02.2026 — в среднем 47 %. Риск обледенения лопастей: температура около 0 °C — 01.02 18:00–02.02 00:00, 02.02 05:00–02.02 09:00, 02.02 19:00–02.02 23:00 (местного времени). Резкий рост выработки (≥ 0.3 за 3 ч) — в 01.02 14:00, 02.02 05:00–02.02 06:00, в 02.02 12:00 (местного времени). По сравнению с предыдущим выпуском прогноз на 01.02 изменился небольшо (+4 %).",
+    "points" : [ {
+      "timestamp" : "2026-01-31T19:00:00Z",
+      "predictedPower" : 0.033,
+      "p10" : 0.0,
+      "p90" : 0.178,
+      "actualPower" : null,
+      "windSpeed" : 3.7,
+      "temperature" : -2.3
+    }, {
+      "timestamp" : "2026-01-31T20:00:00Z",
+      "predictedPower" : 0.016,
+      "p10" : 0.0,
+      "p90" : 0.148,
+      "actualPower" : null,
+      "windSpeed" : 4.1,
+      "temperature" : -2.4
+    }, {
+      "timestamp" : "2026-01-31T21:00:00Z",
+      "predictedPower" : 0.006,
+      "p10" : 0.0,
+      "p90" : 0.137,
+      "actualPower" : null,
+      "windSpeed" : 4.5,
+      "temperature" : -2.6
+    }, {
+      "timestamp" : "2026-01-31T22:00:00Z",
+      "predictedPower" : 0.011,
+      "p10" : 0.0,
+      "p90" : 0.18,
+      "actualPower" : null,
+      "windSpeed" : 3.9,
+      "temperature" : -2.9
+    }, {
+      "timestamp" : "2026-01-31T23:00:00Z",
+      "predictedPower" : 0.0,
+      "p10" : 0.0,
+      "p90" : 0.172,
+      "actualPower" : null,
+      "windSpeed" : 3.8,
+      "temperature" : -3.3
+    }, {
+      "timestamp" : "2026-02-01T00:00:00Z",
+      "predictedPower" : 0.0,
+      "p10" : 0.0,
+      "p90" : 0.22,
+      "actualPower" : null,
+      "windSpeed" : 3.8,
+      "temperature" : -2.7
+    }, {
+      "timestamp" : "2026-02-01T01:00:00Z",
+      "predictedPower" : 0.0,
+      "p10" : 0.0,
+      "p90" : 0.237,
+      "actualPower" : null,
+      "windSpeed" : 4.0,
+      "temperature" : -2.7
+    }, {
+      "timestamp" : "2026-02-01T02:00:00Z",
+      "predictedPower" : 0.0,
+      "p10" : 0.0,
+      "p90" : 0.298,
+      "actualPower" : null,
+      "windSpeed" : 4.8,
+      "temperature" : -2.7
+    }, {
+      "timestamp" : "2026-02-01T03:00:00Z",
+      "predictedPower" : 0.058,
+      "p10" : 0.0,
+      "p90" : 0.442,
+      "actualPower" : null,
+      "windSpeed" : 6.4,
+      "temperature" : -2.3
+    }, {
+      "timestamp" : "2026-02-01T04:00:00Z",
+      "predictedPower" : 0.076,
+      "p10" : 0.0,
+      "p90" : 0.535,
+      "actualPower" : null,
+      "windSpeed" : 6.9,
+      "temperature" : -0.7
+    }, {
+      "timestamp" : "2026-02-01T05:00:00Z",
+      "predictedPower" : 0.121,
+      "p10" : 0.0,
+      "p90" : 0.76,
+      "actualPower" : null,
+      "windSpeed" : 7.7,
+      "temperature" : 1.5
+    }, {
+      "timestamp" : "2026-02-01T06:00:00Z",
+      "predictedPower" : 0.145,
+      "p10" : 0.0,
+      "p90" : 0.833,
+      "actualPower" : null,
+      "windSpeed" : 8.0,
+      "temperature" : 3.4
+    }, {
+      "timestamp" : "2026-02-01T07:00:00Z",
+      "predictedPower" : 0.309,
+      "p10" : 0.0,
+      "p90" : 0.878,
+      "actualPower" : null,
+      "windSpeed" : 8.1,
+      "temperature" : 4.4
+    }, {
+      "timestamp" : "2026-02-01T08:00:00Z",
+      "predictedPower" : 0.321,
+      "p10" : 0.026,
+      "p90" : 0.888,
+      "actualPower" : null,
+      "windSpeed" : 7.9,
+      "temperature" : 5.3
+    }, {
+      "timestamp" : "2026-02-01T09:00:00Z",
+      "predictedPower" : 0.449,
+      "p10" : 0.077,
+      "p90" : 0.89,
+      "actualPower" : null,
+      "windSpeed" : 7.9,
+      "temperature" : 5.7
+    }, {
+      "timestamp" : "2026-02-01T10:00:00Z",
+      "predictedPower" : 0.412,
+      "p10" : 0.034,
+      "p90" : 0.852,
+      "actualPower" : null,
+      "windSpeed" : 7.9,
+      "temperature" : 5.2
+    }, {
+      "timestamp" : "2026-02-01T11:00:00Z",
+      "predictedPower" : 0.32,
+      "p10" : 0.009,
+      "p90" : 0.838,
+      "actualPower" : null,
+      "windSpeed" : 8.1,
+      "temperature" : 3.9
+    }, {
+      "timestamp" : "2026-02-01T12:00:00Z",
+      "predictedPower" : 0.273,
+      "p10" : 0.0,
+      "p90" : 0.753,
+      "actualPower" : null,
+      "windSpeed" : 7.6,
+      "temperature" : 2.3
+    }, {
+      "timestamp" : "2026-02-01T13:00:00Z",
+      "predictedPower" : 0.266,
+      "p10" : 0.0,
+      "p90" : 0.656,
+      "actualPower" : null,
+      "windSpeed" : 7.5,
+      "temperature" : 0.8
+    }, {
+      "timestamp" : "2026-02-01T14:00:00Z",
+      "predictedPower" : 0.233,
+      "p10" : 0.0,
+      "p90" : 0.694,
+      "actualPower" : null,
+      "windSpeed" : 7.7,
+      "temperature" : 0.1
+    }, {
+      "timestamp" : "2026-02-01T15:00:00Z",
+      "predictedPower" : 0.271,
+      "p10" : 0.0,
+      "p90" : 0.716,
+      "actualPower" : null,
+      "windSpeed" : 8.0,
+      "temperature" : -0.3
+    }, {
+      "timestamp" : "2026-02-01T16:00:00Z",
+      "predictedPower" : 0.278,
+      "p10" : 0.0,
+      "p90" : 0.741,
+      "actualPower" : null,
+      "windSpeed" : 8.2,
+      "temperature" : -0.5
+    }, {
+      "timestamp" : "2026-02-01T17:00:00Z",
+      "predictedPower" : 0.238,
+      "p10" : 0.0,
+      "p90" : 0.742,
+      "actualPower" : null,
+      "windSpeed" : 8.3,
+      "temperature" : -0.6
+    }, {
+      "timestamp" : "2026-02-01T18:00:00Z",
+      "predictedPower" : 0.173,
+      "p10" : 0.0,
+      "p90" : 0.696,
+      "actualPower" : null,
+      "windSpeed" : 7.6,
+      "temperature" : -0.8
+    }, {
+      "timestamp" : "2026-02-01T19:00:00Z",
+      "predictedPower" : 0.027,
+      "p10" : 0.0,
+      "p90" : 0.639,
+      "actualPower" : null,
+      "windSpeed" : 7.1,
+      "temperature" : -1.8
+    }, {
+      "timestamp" : "2026-02-01T20:00:00Z",
+      "predictedPower" : 0.048,
+      "p10" : 0.0,
+      "p90" : 0.639,
+      "actualPower" : null,
+      "windSpeed" : 7.1,
+      "temperature" : -2.1
+    }, {
+      "timestamp" : "2026-02-01T21:00:00Z",
+      "predictedPower" : 0.106,
+      "p10" : 0.0,
+      "p90" : 0.677,
+      "actualPower" : null,
+      "windSpeed" : 7.3,
+      "temperature" : -2.1
+    }, {
+      "timestamp" : "2026-02-01T22:00:00Z",
+      "predictedPower" : 0.127,
+      "p10" : 0.0,
+      "p90" : 0.793,
+      "actualPower" : null,
+      "windSpeed" : 7.9,
+      "temperature" : -2.2
+    }, {
+      "timestamp" : "2026-02-01T23:00:00Z",
+      "predictedPower" : 0.254,
+      "p10" : 0.043,
+      "p90" : 0.828,
+      "actualPower" : null,
+      "windSpeed" : 8.5,
+      "temperature" : -2.2
+    }, {
+      "timestamp" : "2026-02-02T00:00:00Z",
+      "predictedPower" : 0.559,
+      "p10" : 0.273,
+      "p90" : 0.931,
+      "actualPower" : null,
+      "windSpeed" : 11.3,
+      "temperature" : -1.6
+    }, {
+      "timestamp" : "2026-02-02T01:00:00Z",
+      "predictedPower" : 0.529,
+      "p10" : 0.295,
+      "p90" : 0.945,
+      "actualPower" : null,
+      "windSpeed" : 11.8,
+      "temperature" : -1.5
+    }, {
+      "timestamp" : "2026-02-02T02:00:00Z",
+      "predictedPower" : 0.478,
+      "p10" : 0.284,
+      "p90" : 0.944,
+      "actualPower" : null,
+      "windSpeed" : 11.9,
+      "temperature" : -1.5
+    }, {
+      "timestamp" : "2026-02-02T03:00:00Z",
+      "predictedPower" : 0.562,
+      "p10" : 0.336,
+      "p90" : 0.944,
+      "actualPower" : null,
+      "windSpeed" : 12.1,
+      "temperature" : -0.9
+    }, {
+      "timestamp" : "2026-02-02T04:00:00Z",
+      "predictedPower" : 0.563,
+      "p10" : 0.359,
+      "p90" : 0.959,
+      "actualPower" : null,
+      "windSpeed" : 11.8,
+      "temperature" : 0.9
+    }, {
+      "timestamp" : "2026-02-02T05:00:00Z",
+      "predictedPower" : 0.714,
+      "p10" : 0.432,
+      "p90" : 0.966,
+      "actualPower" : null,
+      "windSpeed" : 11.6,
+      "temperature" : 3.3
+    }, {
+      "timestamp" : "2026-02-02T06:00:00Z",
+      "predictedPower" : 0.813,
+      "p10" : 0.459,
+      "p90" : 0.969,
+      "actualPower" : null,
+      "windSpeed" : 12.4,
+      "temperature" : 5.2
+    }, {
+      "timestamp" : "2026-02-02T07:00:00Z",
+      "predictedPower" : 0.869,
+      "p10" : 0.547,
+      "p90" : 0.97,
+      "actualPower" : null,
+      "windSpeed" : 12.7,
+      "temperature" : 6.6
+    }, {
+      "timestamp" : "2026-02-02T08:00:00Z",
+      "predictedPower" : 0.898,
+      "p10" : 0.605,
+      "p90" : 0.968,
+      "actualPower" : null,
+      "windSpeed" : 12.9,
+      "temperature" : 7.4
+    }, {
+      "timestamp" : "2026-02-02T09:00:00Z",
+      "predictedPower" : 0.922,
+      "p10" : 0.658,
+      "p90" : 0.971,
+      "actualPower" : null,
+      "windSpeed" : 12.5,
+      "temperature" : 7.6
+    }, {
+      "timestamp" : "2026-02-02T10:00:00Z",
+      "predictedPower" : 0.892,
+      "p10" : 0.598,
+      "p90" : 0.966,
+      "actualPower" : null,
+      "windSpeed" : 11.6,
+      "temperature" : 7.0
+    }, {
+      "timestamp" : "2026-02-02T11:00:00Z",
+      "predictedPower" : 0.617,
+      "p10" : 0.193,
+      "p90" : 0.99,
+      "actualPower" : null,
+      "windSpeed" : 9.7,
+      "temperature" : 5.5
+    }, {
+      "timestamp" : "2026-02-02T12:00:00Z",
+      "predictedPower" : 0.654,
+      "p10" : 0.154,
+      "p90" : 0.933,
+      "actualPower" : null,
+      "windSpeed" : 9.7,
+      "temperature" : 3.3
+    }, {
+      "timestamp" : "2026-02-02T13:00:00Z",
+      "predictedPower" : 0.415,
+      "p10" : 0.023,
+      "p90" : 0.825,
+      "actualPower" : null,
+      "windSpeed" : 8.0,
+      "temperature" : 2.0
+    }, {
+      "timestamp" : "2026-02-02T14:00:00Z",
+      "predictedPower" : 0.39,
+      "p10" : 0.002,
+      "p90" : 0.678,
+      "actualPower" : null,
+      "windSpeed" : 6.8,
+      "temperature" : 1.0
+    }, {
+      "timestamp" : "2026-02-02T15:00:00Z",
+      "predictedPower" : 0.269,
+      "p10" : 0.0,
+      "p90" : 0.59,
+      "actualPower" : null,
+      "windSpeed" : 5.9,
+      "temperature" : 0.3
+    }, {
+      "timestamp" : "2026-02-02T16:00:00Z",
+      "predictedPower" : 0.218,
+      "p10" : 0.0,
+      "p90" : 0.586,
+      "actualPower" : null,
+      "windSpeed" : 5.8,
+      "temperature" : 0.2
+    }, {
+      "timestamp" : "2026-02-02T17:00:00Z",
+      "predictedPower" : 0.153,
+      "p10" : 0.0,
+      "p90" : 0.498,
+      "actualPower" : null,
+      "windSpeed" : 5.8,
+      "temperature" : 0.1
+    }, {
+      "timestamp" : "2026-02-02T18:00:00Z",
+      "predictedPower" : 0.104,
+      "p10" : 0.0,
+      "p90" : 0.454,
+      "actualPower" : null,
+      "windSpeed" : 4.9,
+      "temperature" : -0.1
+    } ]
+  },
+  "reportSource" : "llm"
+}

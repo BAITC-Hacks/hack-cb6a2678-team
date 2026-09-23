@@ -81,8 +81,8 @@ class ForecastService(
                 p90 = ForecastAnalytics.r3(h.p90),
                 // Факта за период прогноза (февраль 2026) нет в данных
                 actualPower = null,
-                windSpeed = h.windSpeed100m ?: w?.first,
-                temperature = h.temperature2m ?: w?.second,
+                windSpeed = (h.windSpeed100m ?: w?.first)?.let { ForecastAnalytics.r1(it) },
+                temperature = (h.temperature2m ?: w?.second)?.let { ForecastAnalytics.r1(it) },
             )
         }
         val summary = ForecastAnalytics.summary(points)

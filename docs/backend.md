@@ -132,13 +132,18 @@ fun myTool(
 
 ## Что дальше (см. `roadmap.md`)
 
-1. Backtest-раннер: цикл агента для всех дат 31.01–26.02 × 2 турбины на финальной модели, результаты в
-   `data/cycles/` коммитятся; заодно заполняется кэш погоды `data/weather-cache/`.
-2. Dockerfile бэкенда и все сервисы в `docker-compose.yml`.
+1. Dockerfile бэкенда и все сервисы в `docker-compose.yml`.
+
+Backtest: `python3 scripts/backtest.py [from] [to]` — цикл агента для каждой даты выпуска и турбины через API,
+результаты в `data/cycles/` (коммитятся). Перезапускать после каждой новой модели ML.
 
 ## Грабли
 
 - Jackson 3: импорты `tools.jackson.*`. В тестах `JsonNode` — через индекс (`node[i]`), `doubleValue()`.
 - Swagger показывает статический `openapi.yaml`: новый эндпоинт без записи там не виден.
+- qwen3:8b изредка зацикливается и генерирует тысячи токенов; Ollama при этом не прерывает генерацию, даже когда
+  клиент отключился. Поэтому `spring.ai.ollama.chat.num-predict: 1024` — потолок длины любого ответа.
+- Jackson `SnakeCaseStrategy` превращает `windSpeed100m` в `wind_speed100m` (без `_` перед цифрами) — для полей
+  с цифрами нужен явный `@JsonProperty`. Тест разбора ответа ML — на настоящем JSON (`MlModelsTests`).
 - `@ConfigurationProperties` с полем `Path` и значением `../...` не биндится (Spring считает это ресурсом веб-приложения) — храните путь строкой.
 - Ollama в Docker на macOS — только CPU (медленно). Для разработки — нативный `brew install ollama`.

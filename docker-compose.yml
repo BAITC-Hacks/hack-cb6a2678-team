@@ -1,4 +1,39 @@
+# Запуск всего проекта: docker compose up --build
+# Без LLM (быстрее, без 5 ГБ модели): docker compose up --build ml backend frontend
 services:
+
+  ml:
+    build: ./ML
+    ports:
+      - "8000:8000"
+
+  backend:
+    build: ./backend
+    ports:
+      - "8080:8080"
+    environment:
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
+      # Нативный Ollama на хосте (быстрее на macOS): OLLAMA_BASE_URL=http://host.docker.internal:11434
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      # Отчёты агента через LLM; без Ollama циклы пишут отчёт по шаблону
+      CYCLE_LLM_REPORT: ${CYCLE_LLM_REPORT:-true}
+    volumes:
+      # Результаты циклов агента и кэш погоды — из репозитория (офлайн-воспроизводимость)
+      - ./data:/data
+      # SCADA из датасета — для бейзлайна метрик
+      - ./ML/data/raw:/ml-data/raw:ro
+    depends_on:
+      ml:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
   ollama:
     image: ollama/ollama:latest
     ports:
@@ -10,7 +45,7 @@ services:
       interval: 5s
       retries: 20
 
-  # Одноразово скачивает модель агента в общий volume и завершается
+  # Одноразово скачивает модель агента (~5 ГБ) в общий volume и завершается
   ollama-pull:
     image: ollama/ollama:latest
     depends_on:

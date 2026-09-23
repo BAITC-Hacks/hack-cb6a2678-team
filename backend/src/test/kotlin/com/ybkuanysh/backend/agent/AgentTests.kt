@@ -30,7 +30,9 @@ class AgentTests(@Autowired val mvc: MockMvc, @Autowired val tools: AgentTools) 
         val (trace, ctx) = newContext()
         val fc = tools.getForecast("t1", "2026-02-05", null, null, ctx)
         // Сутки 05.02 местного времени — из выпуска 04.02 12:00 местного
-        assertEquals(Instant.parse("2026-02-04T07:00:00Z"), fc.forecastIssuedAt)
+        assertTrue(fc.conclusions.any { it.startsWith("Прогноз выпущен 04.02 12:00 местного времени") })
+        // Никаких меток UTC: модель подписывала их как местное время
+        assertTrue(fc.conclusions.none { "Z" in it || "UTC" in it })
         assertEquals(null, fc.hourly)
         assertTrue(fc.conclusions.first().startsWith("За 05.02.2026: средняя мощность"))
         assertEquals(1, fc.conclusions.count { it.startsWith("За ") })

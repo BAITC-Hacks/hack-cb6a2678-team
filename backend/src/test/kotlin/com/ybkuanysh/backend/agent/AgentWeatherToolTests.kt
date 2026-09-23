@@ -61,16 +61,16 @@ class AgentWeatherToolTests {
     fun `weather tool returns one calendar day as known at its start`() {
         val (trace, ctx) = ctx()
         val view = tools().getWeather("t1", "2026-02-01", null, true, ctx)
-        assertEquals(Instant.parse("2026-02-01T00:00:00Z"), view.forecastAt)
-        assertEquals(Instant.parse("2026-01-31T12:00:00Z"), view.runInitAt)
-        assertTrue(!view.runPublishedAt.isAfter(view.forecastAt))
-        assertEquals(24, view.summary.hours)
         assertEquals(24, view.hourly!!.size)
         assertTrue(view.hourly!!.first().startsWith("01.02 01:00 | "))
-        // Один день — одна строка вывода, без итога за период
-        assertEquals(1, view.conclusions.size)
-        assertTrue(view.conclusions.single().startsWith("За 01.02.2026: "))
-        assertTrue("РИСК ОБЛЕДЕНЕНИЯ 24 ч" in view.conclusions.single())
+        // Один день — строка дня (без итога за период) и строка о том, какой прогон использован
+        assertEquals(2, view.conclusions.size)
+        assertTrue(view.conclusions.first().startsWith("За 01.02.2026: "))
+        assertTrue("РИСК ОБЛЕДЕНЕНИЯ 24 ч" in view.conclusions.first())
+        assertEquals(
+            "Прогноз погоды ecmwf_ifs: прогон от 31.01 12:00, опубликован к 31.01 19:00 UTC — известен на момент 01.02 00:00.",
+            view.conclusions.last(),
+        )
         assertEquals(listOf("getWeather"), trace.map { it.tool })
         assertTrue(trace.single().ok)
     }
@@ -80,12 +80,12 @@ class AgentWeatherToolTests {
         val (trace, ctx) = ctx()
         val view = tools().getWeather("t2", "2026-02-10", "2026-02-12", null, ctx)
         assertEquals(null, view.hourly)
-        assertEquals(72, view.summary.hours)
         assertEquals(
             listOf("За 10.02.2026", "За 11.02.2026", "За 12.02.2026"),
             view.conclusions.take(3).map { it.substringBefore(":") },
         )
-        assertTrue(view.conclusions.drop(3).all { it.startsWith("За весь период 10.02.2026–12.02.2026: ") })
+        assertTrue(view.conclusions.drop(3).dropLast(1).all { it.startsWith("За весь период 10.02.2026–12.02.2026: ") })
+        assertTrue(view.conclusions.last().startsWith("Прогноз погоды"))
 
         assertFailsWith<IllegalArgumentException> { tools().getWeather("t1", "5 февраля", null, null, ctx) }
         assertFailsWith<IllegalArgumentException> { tools().getWeather("t1", "2026-02-01", "2026-02-10", null, ctx) }

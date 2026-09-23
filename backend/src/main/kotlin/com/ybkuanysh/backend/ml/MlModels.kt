@@ -1,6 +1,7 @@
 package com.ybkuanysh.backend.ml
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import com.fasterxml.jackson.annotation.JsonProperty
 import tools.jackson.databind.PropertyNamingStrategies
 import tools.jackson.databind.annotation.JsonNaming
 
@@ -49,9 +50,10 @@ data class MlHour(
     val p10: Double,
     val p50: Double,
     val p90: Double,
-    val windSpeed100m: Double? = null,
+    // SnakeCaseStrategy даёт «wind_speed100m» (без «_» перед цифрами), а ML отдаёт «wind_speed_100m»
+    @param:JsonProperty("wind_speed_100m") val windSpeed100m: Double? = null,
     val windSpread: Double? = null,
-    val temperature2m: Double? = null,
+    @param:JsonProperty("temperature_2m") val temperature2m: Double? = null,
 )
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -103,6 +105,7 @@ data class MlEvaluationRow(
     val actual: Double? = null,
     val pcBaseline: Double? = null,
     val anomaly: Boolean = false,
+    @param:JsonProperty("wind_speed_100m") val windSpeed100m: Double? = null,
 )
 
 class MlUnavailableException(message: String) : RuntimeException(message)

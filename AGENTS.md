@@ -68,6 +68,7 @@ docker compose up -d
 # ML-сервис (нужен для /api/forecast): Python 3.12+, на macOS ещё `brew install libomp`
 cd ML && pip install -r requirements.txt pyarrow && uvicorn windml.api:app --port 8000
 cd backend && ./gradlew bootRun            # http://localhost:8080, Swagger: /swagger-ui.html
+python3 scripts/backtest.py                # цикл агента для всех дат × турбин → data/cycles/ (~10 мин с LLM)
 cd backend && ./gradlew test               # тесты (Ollama не нужна)
 ```
 
