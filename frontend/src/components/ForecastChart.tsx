@@ -1,8 +1,9 @@
 import {
+  Area,
   CartesianGrid,
+  ComposedChart,
   Legend,
   Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -20,6 +21,12 @@ const SURFACE = '#ffffff'
 
 interface Props {
   points: ForecastPoint[]
+  showActual: boolean
+}
+
+interface ChartRow extends ForecastPoint {
+  bandLow: number | null
+  bandRange: number | null
 }
 
 function formatTick(ts: string): string {
@@ -33,10 +40,11 @@ function formatTick(ts: string): string {
 
 function ChartTooltip({ active, payload, label }: TooltipContentProps) {
   if (!active || !payload || payload.length === 0) return null
+  const rows = payload.filter((entry) => entry.dataKey !== 'bandLow' && entry.dataKey !== 'bandRange')
   return (
     <div className="chart-tooltip">
       <div className="chart-tooltip-label">{formatTick(String(label))}</div>
-      {payload.map((entry) => (
+      {rows.map((entry) => (
         <div key={String(entry.dataKey)} className="chart-tooltip-row">
           <span className="chart-tooltip-key" style={{ background: entry.color }} />
           <span className="chart-tooltip-value">
@@ -49,13 +57,20 @@ function ChartTooltip({ active, payload, label }: TooltipContentProps) {
   )
 }
 
-export function ForecastChart({ points }: Props) {
-  const hasActual = points.some((p) => p.actualPower !== null)
+export function ForecastChart({ points, showActual }: Props) {
+  const hasActual = showActual && points.some((p) => p.actualPower !== null)
+  const hasBand = points.some((p) => p.p10 !== null && p.p90 !== null)
+
+  const data: ChartRow[] = points.map((p) => ({
+    ...p,
+    bandLow: p.p10,
+    bandRange: p.p10 !== null && p.p90 !== null ? p.p90 - p.p10 : null,
+  }))
 
   return (
-    <div className="chart-card card">
+    <div className="chart-card">
       <ResponsiveContainer width="100%" height={360}>
-        <LineChart data={points} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+        <ComposedChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
           <CartesianGrid stroke={GRID} vertical={false} />
           <XAxis
             dataKey="timestamp"
@@ -72,7 +87,30 @@ export function ForecastChart({ points }: Props) {
             width={40}
           />
           <Tooltip content={(props) => <ChartTooltip {...props} />} />
-          {hasActual && <Legend wrapperStyle={{ fontSize: 12 }} />}
+          {(hasActual || hasBand) && <Legend wrapperStyle={{ fontSize: 12 }} />}
+          {hasBand && (
+            <Area
+              dataKey="bandLow"
+              stackId="band"
+              stroke="none"
+              fill="transparent"
+              isAnimationActive={false}
+              legendType="none"
+              tooltipType="none"
+            />
+          )}
+          {hasBand && (
+            <Area
+              dataKey="bandRange"
+              name="Интервал P10–P90"
+              stackId="band"
+              stroke="none"
+              fill={COLOR_PREDICTED}
+              fillOpacity={0.12}
+              isAnimationActive={false}
+              tooltipType="none"
+            />
+          )}
           <Line
             type="monotone"
             dataKey="predictedPower"
@@ -96,7 +134,7 @@ export function ForecastChart({ points }: Props) {
               isAnimationActive={false}
             />
           )}
-        </LineChart>
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   )

@@ -34,9 +34,10 @@ interface Props {
   turbineId: string
   date: string
   horizonHours: HorizonHours
+  revision: number
 }
 
-export function AgentLogPanel({ turbineId, date, horizonHours }: Props) {
+export function AgentLogPanel({ turbineId, date, horizonHours, revision }: Props) {
   const [log, setLog] = useState<AgentLogResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
@@ -54,7 +55,7 @@ export function AgentLogPanel({ turbineId, date, horizonHours }: Props) {
     }
 
     const load = () => {
-      getAgentLog(date, turbineId)
+      getAgentLog(date, turbineId, revision)
         .then((res) => {
           if (cancelled) return
           setLog(res)
@@ -76,7 +77,7 @@ export function AgentLogPanel({ turbineId, date, horizonHours }: Props) {
       cancelled = true
       stop()
     }
-  }, [turbineId, date, pollKey])
+  }, [turbineId, date, revision, pollKey])
 
   const handleRun = () => {
     setRunning(true)
@@ -90,7 +91,7 @@ export function AgentLogPanel({ turbineId, date, horizonHours }: Props) {
   const live = isInProgress(log)
 
   return (
-    <div className="agent-log-panel card">
+    <div className="agent-log-panel">
       <div className="agent-log-header">
         <button type="button" className="run-btn" onClick={handleRun} disabled={running}>
           {running ? 'Запуск...' : 'Запустить новый цикл'}
@@ -107,6 +108,7 @@ export function AgentLogPanel({ turbineId, date, horizonHours }: Props) {
               <span className="agent-step-indicator" />
               <span className="agent-step-badge">{STATUS_LABEL[s.status]}</span>
               <span className="agent-step-name">{s.stepName}</span>
+              {s.tool && <span className="agent-step-tool">{s.tool}</span>}
               <span className="agent-step-time">{formatTime(s.timestamp)}</span>
               {s.details && <div className="agent-step-details">{s.details}</div>}
             </li>

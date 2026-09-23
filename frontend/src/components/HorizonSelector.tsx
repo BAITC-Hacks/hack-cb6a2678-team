@@ -3,14 +3,13 @@ import type { HorizonHours } from '../types'
 interface Props {
   value: HorizonHours
   onChange: (horizonHours: HorizonHours) => void
+  options: HorizonHours[]
 }
 
-const OPTIONS: HorizonHours[] = [24, 48]
-
-export function HorizonSelector({ value, onChange }: Props) {
+export function HorizonSelector({ value, onChange, options }: Props) {
   return (
     <div className="selector">
-      {OPTIONS.map((h) => (
+      {options.map((h) => (
         <button
           key={h}
           type="button"

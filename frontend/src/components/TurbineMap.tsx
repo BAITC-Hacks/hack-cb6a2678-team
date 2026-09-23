@@ -48,14 +48,14 @@ function FitBounds({ turbines }: { turbines: Turbine[] }) {
 
 export function TurbineMap({ turbines, selectedTurbineId, onSelect }: Props) {
   if (turbines.length === 0) {
-    return <div className="card muted">Загрузка карты...</div>
+    return <div className="muted">Загрузка карты...</div>
   }
 
   const center: [number, number] = [turbines[0].lat, turbines[0].lon]
 
   return (
-    <div className="map-card card">
-      <MapContainer center={center} zoom={15} scrollWheelZoom={false} style={{ height: 320, width: '100%' }}>
+    <div className="map-card">
+      <MapContainer center={center} zoom={15} scrollWheelZoom={false} style={{ height: '100%', width: '100%' }}>
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
