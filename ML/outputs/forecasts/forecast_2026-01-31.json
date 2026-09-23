@@ -1,0 +1,54 @@
+{
+  "meta": {
+    "issue_date": "2026-01-31",
+    "issue_time_local": "2026-01-31 12:00",
+    "source": "open-meteo-previous-runs",
+    "leakage_mode": "strict",
+    "previous_days_used": {
+      "1": 2,
+      "2": 3
+    },
+    "models_ok": [
+      "ecmwf_ifs025",
+      "gfs_seamless",
+      "icon_seamless"
+    ],
+    "models_failed": {},
+    "target_start": "2026-02-01 00:00:00",
+    "target_end": "2026-02-02 23:00:00",
+    "n_hours": 48,
+    "weather_hash": "4fee95592457d6f5",
+    "file": "C:\\Users\\bolat\\Desktop\\wind_forecast_ml\\outputs\\forecasts\\forecast_2026-01-31.csv"
+  },
+  "analysis": {
+    "status": "warning",
+    "recommended_action": "accept_and_recheck_on_update",
+    "issues": [
+      {
+        "level": "warning",
+        "code": "HIGH_NWP_DISAGREEMENT",
+        "message": "29 ч с разбросом ветра между моделями > 2.5 м/с — рекомендуется пересчёт после следующего обновления прогноза погоды"
+      },
+      {
+        "level": "warning",
+        "code": "WIDE_INTERVAL",
+        "message": "средняя ширина интервала p10–p90 = 0.55"
+      }
+    ],
+    "info": [],
+    "stats": {
+      "mean_power": 0.366,
+      "capacity_factor_by_day": {
+        "2026-02-01": 0.226,
+        "2026-02-02": 0.505
+      },
+      "energy_capacity_hours": 17.56,
+      "peak_hour": "2026-02-02 14:00:00",
+      "peak_value": 0.901,
+      "hours_below_5pct": 0,
+      "hours_above_80pct": 4,
+      "mean_interval_width": 0.546,
+      "mean_nwp_spread_ms": 2.86
+    }
+  }
+}

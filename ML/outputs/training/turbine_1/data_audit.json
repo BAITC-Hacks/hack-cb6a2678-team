@@ -1,0 +1,48 @@
+{
+  "source_csv": "C:\\Users\\bolat\\Desktop\\wind_forecast_ml\\data\\raw\\turbine_1.csv",
+  "sha256": "c4c341582fb2dd348b7187f0128cff265fe055f469413871ebb5db50eef58b5b",
+  "raw_rows": 142360,
+  "duplicate_timestamps": 0,
+  "raw_missing_values": {
+    "ID": 0,
+    "Статистическое время": 0,
+    "Средняя скорость ветра(m/s)": 0,
+    "Нормализованная активная мощность": 0,
+    "Средняя температура окружающей среды(°C)": 0
+  },
+  "raw_period": [
+    "2023-03-11 00:00:00",
+    "2026-01-31 23:50:00"
+  ],
+  "hourly_rows": 23728,
+  "anomaly_hours": 149,
+  "weather_site": "turbine_1",
+  "weather_coordinates": [
+    43.64515,
+    78.535604
+  ],
+  "weather_source": "open-meteo-previous-runs",
+  "weather_rows_available": 35602,
+  "weather_first_available": "2024-01-20 18:00:00",
+  "versions": {
+    "python": "3.14.5",
+    "pandas": "3.0.3",
+    "numpy": "2.5.1",
+    "lightgbm": "4.7.0",
+    "scikit_learn": "1.9.1"
+  },
+  "training_parameters": {
+    "learning_rate": 0.03,
+    "num_leaves": 31,
+    "min_child_samples": 40,
+    "feature_fraction": 0.8,
+    "bagging_fraction": 0.8,
+    "bagging_freq": 1,
+    "lambda_l2": 1.0,
+    "verbose": -1,
+    "n_jobs": 4,
+    "random_state": 42,
+    "deterministic": true,
+    "force_col_wise": true
+  }
+}

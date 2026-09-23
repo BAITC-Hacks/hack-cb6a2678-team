@@ -1,0 +1,21 @@
+server:
+  port: 8080
+
+spring:
+  ai:
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY}
+      chat:
+        options:
+          model: claude-sonnet-5
+          max-tokens: 2000
+          temperature: 0.1
+
+windml:
+  base-url: ${WINDML_URL:http://localhost:8000}   # Python-сервер: uvicorn windml.api:app
+  weather-source: previous_runs                    # previous_runs | live | mock
+  connect-timeout-seconds: 5
+  read-timeout-seconds: 120
+  schedule:
+    enabled: false                                 # true — ежедневный выпуск по cron
+    cron: "0 0 12 * * *"                           # 12:00 — время выпуска прогноза

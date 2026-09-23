@@ -1,0 +1,18 @@
+[
+  {
+    "site": "turbine_1",
+    "status": 200,
+    "hours": 48
+  },
+  {
+    "site": "turbine_2",
+    "status": 200,
+    "hours": 48
+  },
+  {
+    "invalid_site_status": 422
+  },
+  {
+    "unavailable_ml_status": 503
+  }
+]
